@@ -1,0 +1,11 @@
+{
+  "name": "google-maps-reviews-scraper",
+  "version": "1.0.0",
+  "description": "Google Maps Reviews Scraper integrated with Moca Hub",
+  "type": "commonjs",
+  "dependencies": {
+    "apify-client": "^2.9.3",
+    "node-fetch": "^2.7.0",
+    "openai": "^4.28.0"
+  }
+}

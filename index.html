@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Maps Reviews Scraper - Moca Hub</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" href="https://mocainteractive.com/wp-content/uploads/2025/04/cropped-moca-instagram-icona-1-192x192.png">
+  
+  <!-- Google Fonts: Figtree -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- External Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  
+  <!-- Moca SDK -->
+  <script src="./moca-sdk.js"></script>
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <!-- App container (hidden until authenticated) -->
+  <div id="app" style="display: none;">
+    
+    <!-- Header with Client Branding -->
+    <header class="header">
+      <div class="client-info">
+        <img id="client-logo" class="client-logo" alt="Client Logo">
+        <div>
+          <h2 id="client-name" class="client-name"></h2>
+          <p class="user-info">
+            <span id="user-name"></span> (<span id="user-role"></span>)
+          </p>
+        </div>
+      </div>
+      <h1 class="app-title">Google Maps Reviews Scraper</h1>
+      <button id="btn-history" class="btn-secondary">📚 Storico</button>
+    </header>
+
+    <div class="container">
+      
+      <!-- Step 1: Configuration -->
+      <div class="card" id="step-1">
+        <h2 class="step-title">⚙️ Step 1: Configurazione</h2>
+        
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+          <button id="mode-brand" class="mode-btn active">🔍 Brand Search</button>
+          <button id="mode-url" class="mode-btn">🔗 URL Manuale</button>
+        </div>
+
+        <!-- Brand Mode -->
+        <div id="brand-mode" class="mode-content">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="brand-name">Nome Brand *</label>
+              <input type="text" id="brand-name" placeholder="es. McDonald's" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="location">Location</label>
+              <select id="location">
+                <option value="italy">🇮🇹 Solo Italia</option>
+                <option value="custom">🌍 Custom Location</option>
+                <option value="world">🌎 Tutto il Mondo</option>
+              </select>
+            </div>
+            
+            <div class="form-group" id="custom-location-group" style="display: none;">
+              <label for="custom-location">Custom Location</label>
+              <input type="text" id="custom-location" placeholder="es. Milano, FR">
+            </div>
+            
+            <div class="form-group">
+              <label for="max-places">Max Schede</label>
+              <input type="number" id="max-places" value="20" min="1" max="100">
+            </div>
+
+            <div class="form-group">
+              <label for="max-reviews">Max Recensioni per Scheda</label>
+              <input type="number" id="max-reviews" value="100" min="10" max="500">
+            </div>
+
+            <div class="form-group">
+              <label for="search-mode">Search Mode</label>
+              <select id="search-mode">
+                <option value="balanced">⚖️ Balanced</option>
+                <option value="aggressive">⚡ Aggressive</option>
+                <option value="strict">🎯 Strict</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checkbox-group">
+            <label>
+              <input type="checkbox" id="skip-closed">
+              Skip Schede Chiuse Permanentemente
+            </label>
+          </div>
+        </div>
+
+        <!-- URL Mode -->
+        <div id="url-mode" class="mode-content" style="display: none;">
+          <div class="form-group">
+            <label for="manual-urls">URL Google Maps (uno per riga)</label>
+            <textarea id="manual-urls" rows="8" placeholder="https://www.google.com/maps/place/...&#10;?query_place_id=ChIJ...&#10;ChIJxxxxx..."></textarea>
+            <small class="help-text">Supporta: query_place_id, place_id, /place/ URL, ChIJ diretto</small>
+          </div>
+
+          <div class="form-group">
+            <label for="max-reviews-url">Max Recensioni per Scheda</label>
+            <input type="number" id="max-reviews-url" value="100" min="10" max="500">
+          </div>
+        </div>
+
+        <!-- AI Configuration -->
+        <div class="ai-section">
+          <div class="checkbox-group">
+            <label>
+              <input type="checkbox" id="enable-ai">
+              🤖 Abilita Analisi AI (OpenAI GPT-4)
+            </label>
+          </div>
+
+          <div id="ai-config" style="display: none;">
+            <div class="form-group">
+              <label for="openai-model">Modello OpenAI</label>
+              <select id="openai-model">
+                <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-search" class="btn-primary">🔍 Cerca Schede</button>
+      </div>
+
+      <!-- Step 2: Place Selection -->
+      <div class="card" id="step-2" style="display: none;">
+        <h2 class="step-title">📍 Step 2: Selezione Schede</h2>
+        <div class="selection-actions">
+          <button id="btn-select-all" class="btn-secondary">✓ Seleziona Tutto</button>
+          <button id="btn-deselect-all" class="btn-secondary">✗ Deseleziona Tutto</button>
+        </div>
+        <div id="places-list" class="places-list"></div>
+        <button id="btn-start-scrape" class="btn-primary">🚀 Avvia Scraping</button>
+      </div>
+
+      <!-- Step 3: Progress -->
+      <div class="card" id="step-3" style="display: none;">
+        <h2 class="step-title">⏳ Step 3: Elaborazione</h2>
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="progress-text" class="progress-text">Inizializzazione...</p>
+        </div>
+      </div>
+
+      <!-- Step 4: Results -->
+      <div class="card" id="step-4" style="display: none;">
+        <h2 class="step-title">📊 Step 4: Risultati</h2>
+        
+        <!-- Export Buttons -->
+        <div class="export-actions">
+          <button id="btn-export-json" class="btn-secondary">💾 Export JSON</button>
+          <button id="btn-export-csv" class="btn-secondary">📄 Export CSV</button>
+          <button id="btn-export-pdf" class="btn-secondary">📄 Export PDF</button>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div id="tabs-nav" class="tabs-nav"></div>
+
+        <!-- Tab Content -->
+        <div id="tabs-content" class="tabs-content"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- History Modal -->
+  <div id="history-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📚 Storico Ricerche</h2>
+        <button id="modal-close" class="btn-close">✕</button>
+      </div>
+      <div class="modal-body" id="history-list"></div>
+      <div class="modal-footer">
+        <button id="btn-clear-history" class="btn-danger">🗑️ Cancella Tutto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script src="./app.js"></script>
+</body>
+</html>
