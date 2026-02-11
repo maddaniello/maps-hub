@@ -53,10 +53,8 @@ exports.handler = async (event) => {
 
         console.log('Starting scrape for', places.length, 'places with max', maxReviews, 'reviews each');
 
-        // Start the actor run
-        const run = await client.actor('compass/crawler-google-places').call(input, {
-            waitForFinish: 0 // Return immediately, we'll poll
-        });
+        // Start the actor run (use .start() to return immediately, we'll poll for status)
+        const run = await client.actor('compass/crawler-google-places').start(input);
 
         return {
             statusCode: 200,

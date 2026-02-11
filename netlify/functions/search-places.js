@@ -46,7 +46,7 @@ exports.handler = async (event) => {
 
     // Construct search query
     let searchQuery = brandName;
-    
+
     // Build location-specific query
     if (location && location !== 'world') {
       if (location === 'italy') {
@@ -73,10 +73,8 @@ exports.handler = async (event) => {
 
     console.log('Starting Apify search:', { searchQuery, maxPlaces, searchMode });
 
-    // Start the actor run
-    const run = await client.actor('nwua9Gu5YrADL7ZDj').call(input, {
-      waitForFinish: 0 // Return immediately, we'll poll
-    });
+    // Start the actor run (use .start() to return immediately, we'll poll for status)
+    const run = await client.actor('nwua9Gu5YrADL7ZDj').start(input);
 
     return {
       statusCode: 200,
