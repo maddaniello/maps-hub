@@ -35,25 +35,20 @@ exports.handler = async (event) => {
 
         // Construct startUrls for Apify actor
         const startUrls = places.map(place => ({
-            url: place.url || `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${place.placeId}`
+            url: place.url || `https://www.google.com/maps/place/?q=place_id:${place.placeId}`
         }));
 
+        // Prepare actor input matching compass/crawler-google-places schema
         const input = {
             startUrls,
             maxReviews: parseInt(maxReviews),
-            language: 'it',
-            personalData: true, // Include author names
-            scrapeReviewId: true,
-            scrapeReviewUrl: true,
-            scrapeReviewerId: true,
-            scrapeReviewerUrl: true,
-            scrapeReviewerNumberOfReviews: false,
-            scrapeResponseFromOwnerText: true
+            reviewsSort: 'newest',
+            language: 'it'
         };
 
         console.log('Starting scrape for', places.length, 'places with max', maxReviews, 'reviews each');
 
-        // Start the actor run (use .start() to return immediately, we'll poll for status)
+        // Start the actor run (returns immediately, we poll for status)
         const run = await client.actor('compass/crawler-google-places').start(input);
 
         return {

@@ -56,24 +56,24 @@ exports.handler = async (event) => {
       }
     }
 
-    // Prepare actor input
+    // Determine max places based on search mode
+    let maxCrawledPlaces = parseInt(maxPlaces);
+    if (searchMode === 'aggressive') {
+      maxCrawledPlaces = Math.round(maxCrawledPlaces * 1.5);
+    }
+
+    // Prepare actor input matching compass/crawler-google-places schema
     const input = {
-      searchQuery,
-      maxPlaces,
+      searchStringsArray: [searchQuery],
+      maxCrawledPlaces,
       language: 'it',
+      maxReviews: 0, // Don't scrape reviews yet, just find places
       skipClosedPlaces: skipClosed
     };
 
-    // Add search mode parameters
-    if (searchMode === 'aggressive') {
-      input.maxPlaces = maxPlaces * 1.5; // Request more to filter later
-    } else if (searchMode === 'strict') {
-      input.exactMatch = true;
-    }
+    console.log('Starting Apify search:', { searchQuery, maxCrawledPlaces, searchMode });
 
-    console.log('Starting Apify search:', { searchQuery, maxPlaces, searchMode });
-
-    // Start the actor run (use .start() to return immediately, we'll poll for status)
+    // Start the actor run (returns immediately, we poll for status)
     const run = await client.actor('nwua9Gu5YrADL7ZDj').start(input);
 
     return {

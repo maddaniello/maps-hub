@@ -64,14 +64,17 @@ exports.handler = async (event) => {
             const dataset = await client.dataset(run.defaultDatasetId).listItems();
 
             // Transform results to our format
+            // compass/crawler-google-places output fields:
+            // title, address, totalScore, reviewsCount, url, placeId, categoryName, etc.
             const places = dataset.items.map(item => ({
-                placeId: item.placeId || item.url?.match(/ChIJ[a-zA-Z0-9_-]+/)?.[0] || '',
+                placeId: item.placeId || '',
                 title: item.title || item.name || 'Unknown',
-                address: item.address || '',
-                rating: item.rating || 0,
-                reviewsCount: item.reviewsCount || item.totalScore || 0,
-                url: item.url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title || '')}&query_place_id=${item.placeId || ''}`
-            })).filter(place => place.placeId); // Only include places with valid placeId
+                address: item.address || item.street || '',
+                rating: item.totalScore || item.rating || 0,
+                reviewsCount: item.reviewsCount || 0,
+                url: item.url || '',
+                categoryName: item.categoryName || ''
+            })).filter(place => place.title && place.title !== 'Unknown');
 
             console.log(`Search succeeded: ${places.length} places found`);
 
