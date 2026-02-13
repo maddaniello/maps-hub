@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "Google Maps Reviews Scraper integrated with Moca Hub",
   "type": "commonjs",
+  "scripts": {
+    "dev": "netlify dev"
+  },
   "dependencies": {
     "apify-client": "^2.9.3",
+    "netlify-cli": "^17.0.0",
     "node-fetch": "^2.7.0",
     "openai": "^4.28.0"
   }

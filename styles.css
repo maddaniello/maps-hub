@@ -7,11 +7,124 @@
   --moca-black: #191919;
   --moca-gray: #8A8A8A;
   --white: #FFFFFF;
-  --bg-gradient: linear-gradient(135deg, var(--moca-red-light) 0%, var(--white) 100%);
-  --shadow: 0 4px 12px rgba(229, 34, 23, 0.1);
+  --bg-color: #F9FAFB;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   --shadow-hover: 0 6px 16px rgba(229, 34, 23, 0.15);
   --transition: all 0.3s ease;
 }
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-color);
+  color: var(--moca-black);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ... (Header & Cards remain mostly same, just verify shadow/border colors) ... */
+
+/* ======================
+   AI Section (Updated)
+   ====================== */
+.ai-section-results {
+  background: var(--white);
+  padding: 2rem;
+  border-radius: 12px;
+  color: var(--moca-black);
+  margin-bottom: 2rem;
+  border-left: 5px solid var(--moca-red);
+  box-shadow: var(--shadow);
+}
+
+.ai-section-results h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  text-align: left;
+  color: var(--moca-red);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wordcloud {
+  background: var(--bg-color);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  min-height: 150px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eee;
+}
+
+.wordcloud-item {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: var(--white);
+  border: 1px solid #eee;
+  border-radius: 20px;
+  font-weight: 600;
+  transition: var(--transition);
+  color: var(--moca-black);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.wordcloud-item:hover {
+  background: var(--moca-red-light);
+  color: var(--moca-red);
+  border-color: var(--moca-red-light);
+  transform: scale(1.05);
+}
+
+.priorities-list,
+.analysis-section {
+  background: var(--bg-color);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #eee;
+}
+
+.priorities-list h4,
+.analysis-section h4 {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+  color: var(--moca-black);
+  font-weight: 700;
+  border-bottom: 2px solid var(--moca-red-light);
+  padding-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.priorities-list li,
+.analysis-section li {
+  color: var(--moca-black);
+}
+
+.analysis-section li::before {
+  content: '•';
+  color: var(--moca-red);
+  font-weight: bold;
+}
+
+/* ======================
+   Progress Bar (Updated)
+   ====================== */
+.progress-fill {
+  background: var(--moca-red);
+  /* Removed purple/orange gradients */
+}
+
 
 * {
   margin: 0;
@@ -373,8 +486,13 @@ body {
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .progress-text {
@@ -429,8 +547,15 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ======================
@@ -535,21 +660,28 @@ body {
    AI Section
    ====================== */
 .ai-section-results {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--white);
   padding: 2rem;
   border-radius: 12px;
-  color: var(--white);
+  color: var(--moca-black);
   margin-bottom: 2rem;
+  border-left: 5px solid var(--moca-red);
+  box-shadow: var(--shadow);
 }
 
 .ai-section-results h3 {
   font-size: 1.5rem;
   margin-bottom: 1.5rem;
-  text-align: center;
+  text-align: left;
+  color: var(--moca-red);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .wordcloud {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-color);
   padding: 1.5rem;
   border-radius: 8px;
   margin-bottom: 1.5rem;
@@ -559,32 +691,44 @@ body {
   gap: 0.75rem;
   align-items: center;
   justify-content: center;
+  border: 1px solid #eee;
 }
 
 .wordcloud-item {
   display: inline-block;
   padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--white);
+  border: 1px solid #eee;
   border-radius: 20px;
   font-weight: 600;
   transition: var(--transition);
+  color: var(--moca-black);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .wordcloud-item:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--moca-red-light);
+  color: var(--moca-red);
+  border-color: var(--moca-red-light);
   transform: scale(1.05);
 }
 
 .priorities-list {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-color);
   padding: 1.5rem;
   border-radius: 8px;
   margin-bottom: 1.5rem;
+  border: 1px solid #eee;
 }
 
 .priorities-list h4 {
   margin-bottom: 1rem;
   font-size: 1.125rem;
+  color: var(--moca-black);
+  font-weight: 700;
+  border-bottom: 2px solid var(--moca-red-light);
+  padding-bottom: 0.5rem;
+  display: inline-block;
 }
 
 .priorities-list ol {
@@ -605,14 +749,20 @@ body {
 }
 
 .analysis-section {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-color);
   padding: 1.5rem;
   border-radius: 8px;
+  border: 1px solid #eee;
 }
 
 .analysis-section h4 {
   margin-bottom: 1rem;
   font-size: 1.125rem;
+  color: var(--moca-black);
+  font-weight: 700;
+  border-bottom: 2px solid var(--moca-red-light);
+  padding-bottom: 0.5rem;
+  display: inline-block;
 }
 
 .analysis-section ul {
@@ -631,6 +781,7 @@ body {
   position: absolute;
   left: 0;
   font-size: 1.5rem;
+  color: var(--moca-red);
 }
 
 /* ======================
@@ -829,8 +980,13 @@ body {
    Animations
    ====================== */
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .spinner {

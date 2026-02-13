@@ -27,21 +27,42 @@ const state = {
   // Initialize Moca SDK
   state.moca = new MocaSDK(MOCA_HUB_URL);
 
-  const authenticated = await state.moca.init();
+  // Check for local development environment
+  const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
-  if (!authenticated) {
-    state.moca.showAccessDenied();
-    return;
+  if (isLocal) {
+    console.warn('[GMRS] Running in LOCAL DEV MODE - Bypassing Authentication');
+
+    // Mock session data for local testing
+    state.moca.session = {
+      client: { name: 'Local Test Client', logo_url: '' },
+      user: { name: 'Local Developer', role: 'Admin' },
+      configurations: {
+        'OPENAI_API_KEY': '', // <--- INSERISCI QUI LA TUA CHIAVE OPENAI PER TEST LOCALI
+        'APIFY_API_KEY': ''   // <--- INSERISCI QUI LA TUA CHIAVE APIFY PER TEST LOCALI
+      }
+    };
+
+    // Skip real init
+    // authenticated = true effectively
+  } else {
+    // Normal Production Flow
+    const authenticated = await state.moca.init();
+
+    if (!authenticated) {
+      state.moca.showAccessDenied();
+      return;
+    }
   }
 
-  console.log('[GMRS] Authentication successful');
+  console.log('[GMRS] Authentication successful (or bypassed locally)');
 
   // Show app
   document.getElementById('app').style.display = 'block';
 
   // Populate client branding
-  const client = state.moca.getClient();
-  const user = state.moca.getUser();
+  const client = state.moca.getClient() || { name: 'Moca Client', logo_url: '' };
+  const user = state.moca.getUser() || { name: 'User', role: 'Guest' };
 
   document.getElementById('client-logo').src = client.logo_url || 'https://mocainteractive.com/assets/svg/logo.svg';
   document.getElementById('client-name').textContent = client.name;
@@ -391,18 +412,19 @@ async function pollScrapeStatus() {
     const data = await response.json();
 
     if (data.status === 'SUCCEEDED') {
-      updateProgress(100, '✅ Scraping Completato!');
       state.scrapeResults = data.results;
-
-      // Display initial results immediately (without AI)
-      displayResults();
 
       // Start AI analysis if enabled
       if (aiEnabled) {
+        updateProgress(100, '✅ Scraping Completato! Avvio Analisi AI...');
+        // Create initial UI structure but keep loading/progress overlay
+        // We do NOT call displayResults() here to avoid "jumping"
         await performAIAnalysis(openaiKey, openaiModel);
+      } else {
+        updateProgress(100, '✅ Scraping Completato!');
+        displayResults();
+        saveToHistory();
       }
-
-      saveToHistory();
       return;
     }
 
@@ -442,13 +464,18 @@ async function performAIAnalysis(openaiKey, openaiModel) {
 
   for (let i = 0; i < total; i += batchSize) {
     const batch = places.slice(i, i + batchSize);
+
+    // Update progress text regarding current batch
+    updateProgress(
+      Math.round((i / total) * 90),
+      `Analisi in corso: ${batch.map(p => p.title).join(', ')}...`
+    );
+
     const promises = batch.map(async (place) => {
       // Skip if no reviews or already analyzed
       if (!place.reviews || place.reviews.length === 0 || place.analysis) return;
 
       try {
-        // Update UI placeholder? (Optional)
-
         const response = await fetch('/.netlify/functions/analyze-place', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -457,7 +484,7 @@ async function performAIAnalysis(openaiKey, openaiModel) {
             openaiModel: openaiModel,
             placeName: place.title,
             reviews: place.reviews,
-            samplingEnabled: samplingEnabled // Pass sampling preference
+            samplingEnabled: samplingEnabled
           })
         });
 
@@ -465,8 +492,6 @@ async function performAIAnalysis(openaiKey, openaiModel) {
 
         if (data.success && data.analysis) {
           place.analysis = data.analysis;
-          // Refresh specific place tab if it's currently open (optimization) or just refresh all
-          // simpler to just refresh the UI for that place if possible, but full redraw is safer
         }
       } catch (e) {
         console.error(`AI analysis failed for ${place.title}`, e);
@@ -474,13 +499,11 @@ async function performAIAnalysis(openaiKey, openaiModel) {
     });
 
     await Promise.all(promises);
-
-    const percent = Math.round(((i + batch.length) / total) * 90);
-    updateProgress(percent, `Analisi AI: ${Math.min(i + batch.length, total)}/${total} schede completate`);
-
-    // Progressive update of UI - redraw to show new analysis
-    displayResults();
   }
+
+  // Update progress before aggregate analysis
+  const percentComplete = 90;
+  updateProgress(percentComplete, 'Generazione report strategico Brand...');
 
   // After all individual places, do aggregated analysis
   updateProgress(90, 'Analisi aggregata Brand...');
@@ -517,12 +540,15 @@ async function performAIAnalysis(openaiKey, openaiModel) {
   }
 
   updateProgress(100, '✅ Analisi AI Completata!');
-  displayResults(); // Final redraw
+
+  // Final display of ALL results and persist to history
+  displayResults();
+  saveToHistory();
 
   // Hide progress after a delay
   setTimeout(() => {
     if (progressContainer) progressContainer.style.display = 'none';
-  }, 3000);
+  }, 2000);
 }
 
 // ========================================
@@ -564,21 +590,28 @@ function createTabButton(id, label, active = false) {
   const btn = document.createElement('button');
   btn.className = `tab-btn ${active ? 'active' : ''}`;
   btn.textContent = label;
-  btn.onclick = () => switchTab(id);
+  btn.onclick = (e) => switchTab(id, e);
   return btn;
 }
 
 // ========================================
 // Switch Tab
 // ========================================
-function switchTab(tabId) {
+function switchTab(tabId, event) {
   // Update buttons
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  event.target.classList.add('active');
+  if (event && event.currentTarget) {
+    event.currentTarget.classList.add('active');
+  }
 
   // Update content
   document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-  document.getElementById(`tab-${tabId}`).classList.add('active');
+  const targetContent = document.getElementById(`tab-${tabId}`);
+  if (targetContent) {
+    targetContent.classList.add('active');
+  } else {
+    console.warn(`Tab content not found for id: tab-${tabId}`);
+  }
 }
 
 // ========================================
@@ -715,7 +748,17 @@ function createPlaceTab(place, index) {
   const neutralPercent = totalReviews > 0 ? Math.round((sentiment.neutral / totalReviews) * 100) : 0;
   const negativePercent = totalReviews > 0 ? Math.round((sentiment.negative / totalReviews) * 100) : 0;
 
+  // Helper for Maps Link
+  const mapsLink = place.url ? `<a href="${place.url}" target="_blank" style="color: var(--moca-red); text-decoration: none; font-weight: bold;">📍 Apri su Google Maps</a>` : '';
+  const address = place.address || place.subTitle || 'Indirizzo non disponibile';
+
   div.innerHTML = `
+    <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee;">
+        <h3 style="margin-bottom: 0.5rem; color: var(--moca-black);">${place.title}</h3>
+        <p style="color: var(--moca-gray); margin-bottom: 0.5rem;">${address}</p>
+        ${mapsLink}
+    </div>
+
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">${place.rating || 'N/A'}</div>
@@ -829,7 +872,7 @@ function createAISection(keywords, analysis, isOverview) {
       <div class="priorities-list">
         <h4>🎯 Top 3 Priorità</h4>
         <ol>
-          ${analysis.priorities.map(p => `<li>${p}</li>`).join('')}
+          ${(analysis.priorities || []).map(p => `<li>${p}</li>`).join('')}
         </ol>
       </div>
       
@@ -837,14 +880,14 @@ function createAISection(keywords, analysis, isOverview) {
         <div class="analysis-section">
           <h4>✅ Punti di Forza</h4>
           <ul>
-            ${analysis.strengths.map(s => `<li>${s}</li>`).join('')}
+            ${(analysis.strengths || []).map(s => `<li>${s}</li>`).join('')}
           </ul>
         </div>
         
         <div class="analysis-section">
           <h4>⚠️ Aree di Miglioramento</h4>
           <ul>
-            ${analysis.weaknesses.map(w => `<li>${w}</li>`).join('')}
+            ${(analysis.weaknesses || []).map(w => `<li>${w}</li>`).join('')}
           </ul>
         </div>
       </div>
@@ -852,16 +895,46 @@ function createAISection(keywords, analysis, isOverview) {
       <div class="analysis-section">
         <h4>💡 Raccomandazioni Strategiche</h4>
         <ul>
-          ${analysis.recommendations.map(r => `<li>${r}</li>`).join('')}
+          ${(analysis.recommendations || []).map(r => `<li>${r}</li>`).join('')}
         </ul>
       </div>
       
       <div class="analysis-section">
         <h4>🚀 Suggerimenti Azionabili</h4>
         <ul>
-          ${analysis.suggestions.map(s => `<li>${s}</li>`).join('')}
+          ${(analysis.suggestions || []).map(s => `<li>${s}</li>`).join('')}
         </ul>
       </div>
+
+      ${analysis.esempi_positivi && analysis.esempi_positivi.length > 0 ? `
+      <div class="analysis-grid" style="margin-top: 2rem;">
+        <div class="analysis-section" style="border-left: 4px solid #22c55e;">
+            <h4 style="color: #22c55e;">✅ Esempi Positivi</h4>
+            <ul style="list-style: none; padding: 0;">
+                ${(analysis.esempi_positivi || []).map(e => `
+                    <li style="margin-bottom: 1rem; padding-left: 0; background: rgba(34, 197, 94, 0.1); padding: 10px; border-radius: 6px;">
+                        <div style="font-weight: bold; font-size: 0.8rem; margin-bottom: 4px;">${'⭐'.repeat(e.stars || 5)}</div>
+                        "${e.text}"
+                    </li>
+                `).join('')}
+            </ul>
+        </div>
+      </div>` : ''}
+
+      ${analysis.esempi_negativi && analysis.esempi_negativi.length > 0 ? `
+      <div class="analysis-grid">
+        <div class="analysis-section" style="border-left: 4px solid #ef4444;">
+            <h4 style="color: #ef4444;">❌ Esempi Negativi</h4>
+            <ul style="list-style: none; padding: 0;">
+                ${(analysis.esempi_negativi || []).map(e => `
+                    <li style="margin-bottom: 1rem; padding-left: 0; background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 6px;">
+                        <div style="font-weight: bold; font-size: 0.8rem; margin-bottom: 4px;">${'⭐'.repeat(e.stars || 1)}</div>
+                        "${e.text}"
+                    </li>
+                `).join('')}
+            </ul>
+        </div>
+      </div>` : ''}
     `;
   }
 
@@ -969,31 +1042,132 @@ function escapeCSV(str) {
 }
 
 async function exportPDF() {
-  alert('📄 Generazione PDF in corso... Questa operazione potrebbe richiedere alcuni secondi.');
+  const btn = document.getElementById('btn-export-pdf');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '📄 Generazione...';
 
-  // Note: Full PDF generation with jsPDF would be implemented here
-  // For brevity, showing the structure
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let y = 20;
+    const lineHeight = 7;
 
-  // Add branding
-  doc.setFontSize(20);
-  doc.setTextColor(229, 34, 23);
-  doc.text('Google Maps Reviews Scraper', 20, 20);
+    function checkPageBreak(add = 0) {
+      if (y + add > 280) {
+        doc.addPage();
+        y = 20;
+      }
+    }
 
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  doc.text(`Cliente: ${state.moca.getClient().name}`, 20, 30);
-  doc.text(`Data: ${new Date().toLocaleDateString('it-IT')}`, 20, 37);
+    function stripEmojis(str) {
+      if (!str) return '';
+      return str.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F018}-\u{1F0F5}\u{1F200}-\u{1F270}\u{2600}-\u{26FF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{2934}\u{2935}\u{25AA}\u{25AB}\u{25FE}\u{25FD}\u{25FC}\u{25FB}\u{25FA}\u{2500}-\u{257F}]/gu, '')
+        .trim();
+    }
 
-  // Add statistics
-  const stats = state.scrapeResults.aggregateStats;
-  doc.text(`Schede Analizzate: ${stats.totalPlaces}`, 20, 50);
-  doc.text(`Totale Recensioni: ${stats.totalReviews}`, 20, 57);
-  doc.text(`Rating Medio: ${stats.avgRating}`, 20, 64);
+    function addHeader(text, size = 16) {
+      checkPageBreak(15);
+      doc.setFontSize(size);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(229, 34, 23); // Moca Red
+      doc.text(stripEmojis(text), margin, y);
+      y += 10;
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+    }
 
-  // Save
-  doc.save(`gmrs-report-${Date.now()}.pdf`);
+    function addSection(title, items) {
+      if (!items || items.length === 0) return;
+      checkPageBreak(items.length * 6 + 15);
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(stripEmojis(title), margin, y);
+      y += 6;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      items.forEach(item => {
+        const cleanItem = stripEmojis(item);
+        const lines = doc.splitTextToSize(`• ${cleanItem}`, pageWidth - (margin * 2));
+        checkPageBreak(lines.length * 5);
+        doc.text(lines, margin, y);
+        y += lines.length * 5;
+      });
+      y += 5;
+    }
+
+    // --- COVER & OVERVIEW ---
+    doc.setFontSize(22);
+    doc.setTextColor(229, 34, 23);
+    doc.text('Google Maps Reviews Analysis', margin, y);
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Cliente: ${stripEmojis(state.moca.getClient().name)}`, margin, y);
+    y += 6;
+    doc.text(`Data: ${new Date().toLocaleDateString('it-IT')}`, margin, y);
+    y += 15;
+
+    // Aggregate Stats
+    const stats = state.scrapeResults.aggregateStats;
+    addHeader('Panoramica Globale', 16);
+    doc.text(`Schede Analizzate: ${stats.totalPlaces}`, margin, y); y += 6;
+    doc.text(`Totale Recensioni: ${stats.totalReviews}`, margin, y); y += 6;
+    doc.text(`Rating Medio: ${stats.avgRating} / 5.0`, margin, y); y += 6;
+    doc.text(`Sentiment: ${stats.sentiment.positivePercent}% Pos, ${stats.sentiment.negativePercent}% Neg`, margin, y); y += 12;
+
+    // Aggregate AI
+    if (stats.aiStats && stats.aiStats.analysis) {
+      const az = stats.aiStats.analysis;
+      addHeader('Analisi Strategica Brand', 14);
+      addSection('Priorità', az.priorities);
+      addSection('Punti di Forza', az.strengths);
+      addSection('Aree di Miglioramento', az.weaknesses);
+      addSection('Raccomandazioni', az.recommendations);
+    }
+
+    // --- PLACES ---
+    const places = state.scrapeResults.places;
+    places.forEach((place, index) => {
+      doc.addPage();
+      y = 20;
+
+      addHeader(`${index + 1}. ${stripEmojis(place.title)}`, 16);
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(stripEmojis(place.address || place.subTitle || ''), margin, y);
+      y += 10;
+      doc.setTextColor(0, 0, 0);
+
+      doc.text(`Rating: ${place.rating} (${place.reviewsCount || 0} reviews)`, margin, y); y += 6;
+
+      if (place.analysis) {
+        y += 5;
+        addSection('Priorità Locali', place.analysis.priorities);
+        addSection('Punti di Forza', place.analysis.strengths);
+        addSection('Aree di Miglioramento', place.analysis.weaknesses);
+      } else {
+        y += 10;
+        doc.setFont('helvetica', 'italic');
+        doc.text('(Analisi AI non disponibile per questa scheda)', margin, y);
+      }
+    });
+
+    doc.save(`gmrs-report-${state.moca.getClient().name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}.pdf`);
+
+  } catch (error) {
+    console.error('PDF Generation Error:', error);
+    alert('Errore durante la generazione del PDF. Controlla la console.');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
 
 // ========================================
@@ -1034,8 +1208,15 @@ function saveToHistory() {
     history.splice(20);
   }
 
-  localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
-  console.log('[GMRS] Saved to history');
+  try {
+    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+    console.log('[GMRS] Saved to history successfully');
+  } catch (e) {
+    console.error('[GMRS] Failed to save to history:', e);
+    if (e.name === 'QuotaExceededError') {
+      alert('⚠️ Impossibile salvare nello storico: Memoria piena. Prova a cancellare vecchie ricerche.');
+    }
+  }
 }
 
 function getHistory() {

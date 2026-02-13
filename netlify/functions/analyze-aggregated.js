@@ -50,12 +50,11 @@ exports.handler = async (event) => {
                 body: JSON.stringify({
                     success: true,
                     analysis: {
-                        punti_forza: ['Dati insufficienti'],
-                        punti_debolezza: ['Nessuna recensione con testo'],
-                        temi_positivi: [],
-                        temi_negativi: [],
-                        suggerimenti_strategici: ['Incoraggiare recensioni testuali'],
-                        priorita: []
+                        strengths: ['Dati insufficienti'],
+                        weaknesses: ['Nessuna recensione con testo'],
+                        priorities: [],
+                        recommendations: ['Incoraggiare recensioni testuali'],
+                        suggestions: []
                     }
                 })
             };
@@ -93,15 +92,15 @@ ${positiveTexts || '(Nessuna recensione positiva con testo)'}
 CAMPIONE RECENSIONI NEGATIVE:
 ${negativeTexts || '(Nessuna recensione negativa con testo)'}
 
-Fornisci un'analisi STRATEGICA a livello BRAND in formato JSON con:
-1. "punti_forza": array di 5-8 punti di forza COMUNI a livello brand
-2. "punti_debolezza": array di 5-8 punti di debolezza RICORRENTI a livello brand
-3. "temi_positivi": array di 3-5 temi/pattern positivi emergenti
-4. "temi_negativi": array di 3-5 temi/pattern negativi ricorrenti
-5. "suggerimenti_strategici": array di 5-7 azioni strategiche per il brand
-6. "priorita": array di 3 priorità assolute da affrontare subito
+Fornisci un'analisi STRATEGICA a livello BRAND in formato JSON con questi esatti campi:
+1. "strengths": array di 5-8 punti di forza COMUNI a livello brand
+2. "weaknesses": array di 5-8 punti di debolezza RICORRENTI a livello brand
+3. "priorities": array di 3 priorità assolute da affrontare subito
+4. "recommendations": array di 5-7 azioni strategiche per il brand
+5. "suggestions": array di 3-5 suggerimenti tattici immediati
 
 Concentrati su PATTERN RICORRENTI e INSIGHT STRATEGICI, non su casi singoli.
+Scrivi in ITALIANO.
 Rispondi SOLO con JSON valido, senza testo aggiuntivo.`;
 
         console.log(`Starting aggregated analysis for ${brandName} with ${reviews.length} total reviews`);
