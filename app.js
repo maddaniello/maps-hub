@@ -211,12 +211,16 @@ async function handleSearch() {
 // ========================================
 async function pollSearchStatus() {
   const apifyKey = state.moca.getConfig('APIFY_API_KEY');
-  const maxAttempts = 300; // 10 minutes max (2s interval)
+  const maxAttempts = 150; // ~5 minutes max (2s interval)
   let attempts = 0;
 
   const poll = async () => {
     attempts++;
-    updateProgress(10 + (attempts / maxAttempts) * 40, `Ricerca in corso... Tentativo ${attempts}`);
+    const elapsed = Math.round(attempts * 2);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    updateProgress(Math.min(45, 10 + (attempts / maxAttempts) * 40), `Ricerca in corso... ${timeStr}`);
 
     const response = await fetch('/.netlify/functions/check-search-status', {
       method: 'POST',

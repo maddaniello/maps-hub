@@ -44,42 +44,32 @@ exports.handler = async (event) => {
     // Initialize Apify client
     const client = new ApifyClient({ token: apifyApiKey });
 
-    // Construct search query
+    // Construct search query - keep it simple, let countryCode handle location
+    // Reference app uses just the brand name + countryCode
     let searchQuery = brandName;
 
-    // Build location-specific query
-    if (location && location !== 'world') {
-      if (location === 'italy') {
-        searchQuery = `${brandName} in Italy`;
-      } else {
-        searchQuery = `${brandName} in ${location}`;
-      }
+    // Only append location for custom locations (not Italy/world)
+    if (location && location !== 'world' && location !== 'italy') {
+      searchQuery = `${brandName} ${location}`;
     }
 
-    // Determine max places based on search mode
-    let maxCrawledPlaces = parseInt(maxPlaces);
-    if (searchMode === 'aggressive') {
-      maxCrawledPlaces = Math.round(maxCrawledPlaces * 1.5);
-    }
+    // Max places - keep it reasonable to save credits
+    const maxPlacesInt = Math.min(parseInt(maxPlaces), 100);
 
-    // Prepare actor input matching compass/crawler-google-places schema
+    // Prepare actor input - use EXACT same parameters as reference app
     const input = {
       searchStringsArray: [searchQuery],
-      maxCrawledPlaces,
+      maxCrawledPlacesPerSearch: maxPlacesInt, // Correct param name (reference app)
       language: 'it',
-      countryCode: location === 'italy' || !location || location === 'world' ? '' : '',
-      maxReviews: 0, // Don't scrape reviews yet, just find places
+      countryCode: location === 'italy' ? 'it' : '',
       includeWebsiteUrl: true,
-      includeReviews: false, // Save Apify credits - reviews scraped separately
-      skipClosedPlaces: skipClosed
+      includeReviews: false, // Don't scrape reviews yet - saves credits!
+      skipClosedPlaces: skipClosed,
+      // Speed optimizations
+      maxAutoscrolledPlaces: maxPlacesInt, // Stop scrolling once we have enough
     };
 
-    // Add countryCode for Italy-specific searches (like reference app)
-    if (location === 'italy') {
-      input.countryCode = 'it';
-    }
-
-    console.log('Starting Apify search:', { searchQuery, maxCrawledPlaces, searchMode });
+    console.log('Starting Apify search:', { searchQuery, maxPlacesInt, searchMode });
 
     // Start the actor run (returns immediately, we poll for status)
     const run = await client.actor('nwua9Gu5YrADL7ZDj').start(input);
