@@ -67,9 +67,17 @@ exports.handler = async (event) => {
       searchStringsArray: [searchQuery],
       maxCrawledPlaces,
       language: 'it',
+      countryCode: location === 'italy' || !location || location === 'world' ? '' : '',
       maxReviews: 0, // Don't scrape reviews yet, just find places
+      includeWebsiteUrl: true,
+      includeReviews: false, // Save Apify credits - reviews scraped separately
       skipClosedPlaces: skipClosed
     };
+
+    // Add countryCode for Italy-specific searches (like reference app)
+    if (location === 'italy') {
+      input.countryCode = 'it';
+    }
 
     console.log('Starting Apify search:', { searchQuery, maxCrawledPlaces, searchMode });
 

@@ -37,6 +37,8 @@ exports.handler = async (event) => {
 
             let placeId = null;
             let title = 'Unknown Location';
+            // Keep the ORIGINAL URL for the scraper - it works best with original URLs
+            let scrapingUrl = trimmedUrl;
 
             // Pattern 1: ?query_place_id=ChIJ...
             const queryPlaceIdMatch = trimmedUrl.match(/query_place_id=([a-zA-Z0-9_-]+)/);
@@ -61,24 +63,27 @@ exports.handler = async (event) => {
             const directPlaceIdMatch = trimmedUrl.match(/^(ChIJ[a-zA-Z0-9_-]+)$/);
             if (!placeId && directPlaceIdMatch) {
                 placeId = directPlaceIdMatch[1];
+                // For bare place IDs, construct a proper URL
+                scrapingUrl = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
             }
 
-            // Pattern 5: /place/Name+Location without place ID (try to extract name)
+            // Pattern 5: /place/Name+Location without place ID (extract name)
             const placeNameMatch = trimmedUrl.match(/\/place\/([^\/\?]+)/);
             if (!placeId && placeNameMatch) {
                 title = decodeURIComponent(placeNameMatch[1].replace(/\+/g, ' '));
-                // We'll create a search URL instead
+                // Keep original URL for scraping
             }
 
-            if (placeId || title !== 'Unknown Location') {
-                const placeUrl = placeId
-                    ? `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${placeId}`
-                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title)}`;
+            // Pattern 6: Google Maps short URL (goo.gl/maps/...)
+            if (!placeId && /goo\.gl\/maps/.test(trimmedUrl)) {
+                // Keep original URL - the scraper can follow redirects
+            }
 
+            if (placeId || title !== 'Unknown Location' || /google\.com\/maps/.test(trimmedUrl)) {
                 places.push({
                     placeId: placeId || `search:${title}`,
-                    title,
-                    url: placeUrl,
+                    title: title !== 'Unknown Location' ? title : (placeId ? `Scheda ${places.length + 1}` : 'Unknown'),
+                    url: scrapingUrl,  // Use original URL for scraping!
                     originalUrl: trimmedUrl
                 });
             } else {

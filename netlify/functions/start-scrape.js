@@ -33,12 +33,14 @@ exports.handler = async (event) => {
 
         const client = new ApifyClient({ token: apifyApiKey });
 
-        // Construct startUrls for Apify actor
+        // Build startUrls - use original Google Maps URLs directly
+        // The Reviews Scraper works best with original /maps/place/ URLs
         const startUrls = places.map(place => ({
-            url: place.url || `https://www.google.com/maps/place/?q=place_id:${place.placeId}`
+            url: place.url || place.originalUrl || `https://www.google.com/maps/place/?q=place_id:${place.placeId}`
         }));
 
-        // Prepare actor input matching compass/crawler-google-places schema
+        // Use compass/Google-Maps-Reviews-Scraper (same as working reference app)
+        // This actor returns flat review objects, NOT nested reviews in place data
         const input = {
             startUrls,
             maxReviews: parseInt(maxReviews),
@@ -46,10 +48,11 @@ exports.handler = async (event) => {
             language: 'it'
         };
 
-        console.log('Starting scrape for', places.length, 'places with max', maxReviews, 'reviews each');
+        console.log('Starting review scrape for', places.length, 'places with max', maxReviews, 'reviews each');
+        console.log('startUrls:', JSON.stringify(startUrls));
 
-        // Start the actor run (returns immediately, we poll for status)
-        const run = await client.actor('compass/crawler-google-places').start(input);
+        // Start the actor run asynchronously (we poll for status via check-scrape)
+        const run = await client.actor('compass/Google-Maps-Reviews-Scraper').start(input);
 
         return {
             statusCode: 200,
@@ -57,7 +60,14 @@ exports.handler = async (event) => {
             body: JSON.stringify({
                 success: true,
                 runId: run.id,
-                statusUrl: `https://api.apify.com/v2/acts/compass~crawler-google-places/runs/${run.id}`
+                placesMetadata: places.map(p => ({
+                    placeId: p.placeId,
+                    title: p.title,
+                    address: p.address,
+                    rating: p.rating,
+                    reviewsCount: p.reviewsCount,
+                    url: p.url
+                }))
             })
         };
 

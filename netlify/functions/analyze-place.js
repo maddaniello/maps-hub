@@ -23,7 +23,7 @@ exports.handler = async (event) => {
     try {
         const {
             openaiApiKey,
-            openaiModel = 'gpt-4-turbo-preview',
+            openaiModel = 'gpt-4o-mini',
             placeName,
             reviews
         } = JSON.parse(event.body);
@@ -38,10 +38,8 @@ exports.handler = async (event) => {
 
         const openai = new OpenAI({ apiKey: openaiApiKey });
 
-        // Limit to 50 most recent reviews with text
-        const reviewsWithText = reviews
-            .filter(r => r.text && r.text.trim().length > 0)
-            .slice(0, 50);
+        // Filter reviews with text
+        const reviewsWithText = reviews.filter(r => r.text && r.text.trim().length > 0);
 
         if (reviewsWithText.length === 0) {
             return {
@@ -50,66 +48,65 @@ exports.handler = async (event) => {
                 body: JSON.stringify({
                     success: true,
                     analysis: {
-                        strengths: ['Insufficient review data'],
-                        weaknesses: ['No text reviews available for analysis'],
-                        priorities: ['Encourage customers to leave detailed reviews'],
-                        recommendations: ['Focus on improving review quantity and quality'],
-                        suggestions: ['Implement review request campaigns']
+                        strengths: ['Dati insufficienti per l\'analisi'],
+                        weaknesses: ['Nessuna recensione con testo disponibile'],
+                        priorities: ['Incoraggiare i clienti a lasciare recensioni dettagliate'],
+                        recommendations: ['Migliorare la quantità e qualità delle recensioni'],
+                        suggestions: ['Implementare campagne di richiesta recensioni']
                     }
                 })
             };
         }
 
-        // Construct review text for analysis
-        const reviewTexts = reviewsWithText.map((r, i) =>
-            `Review ${i + 1} (${r.stars} stars): ${r.text}`
-        ).join('\n\n');
+        // OPTIMIZATION: Sample 20 positive + 20 negative, truncate to 200 chars
+        // (Same approach as working reference app - saves tokens!)
+        const positiveReviews = reviewsWithText.filter(r => (r.stars || 0) >= 4).slice(0, 20);
+        const negativeReviews = reviewsWithText.filter(r => (r.stars || 0) <= 2).slice(0, 20);
 
-        const prompt = `Analyze the following Google Maps reviews for "${placeName}".
+        const positiveTexts = positiveReviews.map(r => `- ${(r.text || '').substring(0, 200)}`).join('\n');
+        const negativeTexts = negativeReviews.map(r => `- ${(r.text || '').substring(0, 200)}`).join('\n');
 
-Provide a structured JSON response with:
+        const prompt = `Analizza le seguenti recensioni di Google Maps per "${placeName}".
+
+RECENSIONI POSITIVE (${positiveReviews.length} campioni):
+${positiveTexts || '- Nessuna recensione positiva con testo'}
+
+RECENSIONI NEGATIVE (${negativeReviews.length} campioni):
+${negativeTexts || '- Nessuna recensione negativa con testo'}
+
+Totale recensioni: ${reviewsWithText.length}
+
+Fornisci un'analisi strutturata in formato JSON con:
 {
-  "strengths": ["strength 1", "strength 2", ...],
-  "weaknesses": ["weakness 1", "weakness 2", ...],
-  "priorities": ["top priority 1", "top priority 2", "top priority 3"],
-  "recommendations": ["strategic recommendation 1", "strategic recommendation 2", ...],
-  "suggestions": ["specific actionable suggestion 1", "specific actionable suggestion 2", ...]
+  "strengths": ["3-5 punti di forza emersi dalle recensioni positive"],
+  "weaknesses": ["3-5 aree di miglioramento dalle recensioni negative"],
+  "priorities": ["3 priorità urgenti da affrontare"],
+  "recommendations": ["3-5 raccomandazioni strategiche"],
+  "suggestions": ["5-7 suggerimenti concreti e actionable"]
 }
 
-IMPORTANT GUIDELINES:
-- Identify 3-5 key strengths mentioned repeatedly in positive reviews
-- Identify 3-5 key weaknesses mentioned in negative reviews
-- Provide EXACTLY 3 top priorities (most urgent issues to address)
-- Give 3-5 strategic recommendations for improvement
-- Provide 5-7 concrete, actionable suggestions
-- Focus on patterns and recurring themes
-- Be specific and data-driven
-- Write in Italian if reviews are in Italian, otherwise in English
+Concentrati su pattern ricorrenti. Scrivi in italiano. Rispondi SOLO con JSON valido.`;
 
-Reviews (${reviewTexts.length} total):
-
-${reviewTexts}`;
-
-        console.log(`Analyzing ${reviewsWithText.length} reviews for ${placeName}`);
+        console.log(`Analyzing ${reviewsWithText.length} reviews for ${placeName} (${positiveReviews.length} pos, ${negativeReviews.length} neg samples)`);
 
         const completion = await openai.chat.completions.create({
             model: openaiModel,
             messages: [
                 {
                     role: 'system',
-                    content: 'You are an expert business analyst specializing in customer feedback analysis. Provide structured, actionable insights from Google Maps reviews.'
+                    content: 'Sei un esperto di analisi del sentiment e customer experience. Rispondi sempre in formato JSON valido.'
                 },
                 {
                     role: 'user',
                     content: prompt
                 }
             ],
-            response_format: { type: 'json_object' },
             temperature: 0.7,
-            max_tokens: 2000
+            max_tokens: 1500
         });
 
-        const analysisText = completion.choices[0].message.content;
+        const analysisText = completion.choices[0].message.content.trim()
+            .replace(/```json/g, '').replace(/```/g, '').trim();
         const analysis = JSON.parse(analysisText);
 
         console.log('Analysis completed successfully');

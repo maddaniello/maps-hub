@@ -3,269 +3,270 @@
 // ========================================
 const MOCA_HUB_URL = 'https://moca-hub.netlify.app';
 const STORAGE_KEYS = {
-    HISTORY: 'gmrs_history'
+  HISTORY: 'gmrs_history'
 };
 
 const state = {
-    moca: null,
-    currentMode: 'brand',
-    searchResults: [],
-    selectedPlaces: [],
-    scrapeResults: null,
-    activeTab: 'overview',
-    searchRunId: null,
-    scrapeRunId: null
+  moca: null,
+  currentMode: 'brand',
+  searchResults: [],
+  selectedPlaces: [],
+  scrapeResults: null,
+  activeTab: 'overview',
+  searchRunId: null,
+  scrapeRunId: null,
+  placesMetadata: [] // Store metadata for check-scrape context
 };
 
 // ========================================
 // Application Initialization
 // ========================================
 (async function init() {
-    console.log('[GMRS] Initializing application...');
+  console.log('[GMRS] Initializing application...');
 
-    // Initialize Moca SDK
-    state.moca = new MocaSDK(MOCA_HUB_URL);
+  // Initialize Moca SDK
+  state.moca = new MocaSDK(MOCA_HUB_URL);
 
-    const authenticated = await state.moca.init();
+  const authenticated = await state.moca.init();
 
-    if (!authenticated) {
-        state.moca.showAccessDenied();
-        return;
-    }
+  if (!authenticated) {
+    state.moca.showAccessDenied();
+    return;
+  }
 
-    console.log('[GMRS] Authentication successful');
+  console.log('[GMRS] Authentication successful');
 
-    // Show app
-    document.getElementById('app').style.display = 'block';
+  // Show app
+  document.getElementById('app').style.display = 'block';
 
-    // Populate client branding
-    const client = state.moca.getClient();
-    const user = state.moca.getUser();
+  // Populate client branding
+  const client = state.moca.getClient();
+  const user = state.moca.getUser();
 
-    document.getElementById('client-logo').src = client.logo_url || 'https://mocainteractive.com/assets/svg/logo.svg';
-    document.getElementById('client-name').textContent = client.name;
-    document.getElementById('user-name').textContent = user.name;
-    document.getElementById('user-role').textContent = user.role;
+  document.getElementById('client-logo').src = client.logo_url || 'https://mocainteractive.com/assets/svg/logo.svg';
+  document.getElementById('client-name').textContent = client.name;
+  document.getElementById('user-name').textContent = user.name;
+  document.getElementById('user-role').textContent = user.role;
 
-    // Setup event listeners
-    setupEventListeners();
+  // Setup event listeners
+  setupEventListeners();
 
-    console.log('[GMRS] Application ready');
+  console.log('[GMRS] Application ready');
 })();
 
 // ========================================
 // Event Listeners Setup
 // ========================================
 function setupEventListeners() {
-    // Mode toggle
-    document.getElementById('mode-brand').addEventListener('click', () => switchMode('brand'));
-    document.getElementById('mode-url').addEventListener('click', () => switchMode('url'));
+  // Mode toggle
+  document.getElementById('mode-brand').addEventListener('click', () => switchMode('brand'));
+  document.getElementById('mode-url').addEventListener('click', () => switchMode('url'));
 
-    // Location selector
-    document.getElementById('location').addEventListener('change', (e) => {
-        const customGroup = document.getElementById('custom-location-group');
-        customGroup.style.display = e.target.value === 'custom' ? 'block' : 'none';
-    });
+  // Location selector
+  document.getElementById('location').addEventListener('change', (e) => {
+    const customGroup = document.getElementById('custom-location-group');
+    customGroup.style.display = e.target.value === 'custom' ? 'block' : 'none';
+  });
 
-    // AI toggle
-    document.getElementById('enable-ai').addEventListener('change', (e) => {
-        document.getElementById('ai-config').style.display = e.target.checked ? 'block' : 'none';
-    });
+  // AI toggle
+  document.getElementById('enable-ai').addEventListener('change', (e) => {
+    document.getElementById('ai-config').style.display = e.target.checked ? 'block' : 'none';
+  });
 
-    // Main actions
-    document.getElementById('btn-search').addEventListener('click', handleSearch);
-    document.getElementById('btn-select-all').addEventListener('click', () => toggleAllPlaces(true));
-    document.getElementById('btn-deselect-all').addEventListener('click', () => toggleAllPlaces(false));
-    document.getElementById('btn-start-scrape').addEventListener('click', handleStartScrape);
+  // Main actions
+  document.getElementById('btn-search').addEventListener('click', handleSearch);
+  document.getElementById('btn-select-all').addEventListener('click', () => toggleAllPlaces(true));
+  document.getElementById('btn-deselect-all').addEventListener('click', () => toggleAllPlaces(false));
+  document.getElementById('btn-start-scrape').addEventListener('click', handleStartScrape);
 
-    // Export actions
-    document.getElementById('btn-export-json').addEventListener('click', exportJSON);
-    document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
-    document.getElementById('btn-export-pdf').addEventListener('click', exportPDF);
+  // Export actions
+  document.getElementById('btn-export-json').addEventListener('click', exportJSON);
+  document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
+  document.getElementById('btn-export-pdf').addEventListener('click', exportPDF);
 
-    // History modal
-    document.getElementById('btn-history').addEventListener('click', openHistoryModal);
-    document.getElementById('modal-close').addEventListener('click', closeHistoryModal);
-    document.getElementById('btn-clear-history').addEventListener('click', clearAllHistory);
+  // History modal
+  document.getElementById('btn-history').addEventListener('click', openHistoryModal);
+  document.getElementById('modal-close').addEventListener('click', closeHistoryModal);
+  document.getElementById('btn-clear-history').addEventListener('click', clearAllHistory);
 
-    // Close modal on outside click
-    document.getElementById('history-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'history-modal') closeHistoryModal();
-    });
+  // Close modal on outside click
+  document.getElementById('history-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'history-modal') closeHistoryModal();
+  });
 }
 
 // ========================================
 // Mode Switching
 // ========================================
 function switchMode(mode) {
-    state.currentMode = mode;
+  state.currentMode = mode;
 
-    // Update buttons
-    document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`mode-${mode}`).classList.add('active');
+  // Update buttons
+  document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(`mode-${mode}`).classList.add('active');
 
-    // Update content
-    document.getElementById('brand-mode').style.display = mode === 'brand' ? 'block' : 'none';
-    document.getElementById('url-mode').style.display = mode === 'url' ? 'block' : 'none';
+  // Update content
+  document.getElementById('brand-mode').style.display = mode === 'brand' ? 'block' : 'none';
+  document.getElementById('url-mode').style.display = mode === 'url' ? 'block' : 'none';
 }
 
 // ========================================
 // Search Places
 // ========================================
 async function handleSearch() {
-    const btn = document.getElementById('btn-search');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Ricerca in corso...';
+  const btn = document.getElementById('btn-search');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Ricerca in corso...';
 
-    try {
-        // Get API keys from Moca SDK
-        const apifyKey = state.moca.getConfig('APIFY_API_KEY');
+  try {
+    // Get API keys from Moca SDK
+    const apifyKey = state.moca.getConfig('APIFY_API_KEY');
 
-        if (!apifyKey) {
-            alert('⚠️ Apify API Key non configurata. Vai su Moca Hub → Configurations');
-            return;
-        }
-
-        // Show progress
-        showStep(3);
-        updateProgress(10, 'Avvio ricerca...');
-
-        let response;
-
-        if (state.currentMode === 'brand') {
-            // Brand search mode
-            const brandName = document.getElementById('brand-name').value.trim();
-            if (!brandName) {
-                alert('Inserisci un nome brand');
-                return;
-            }
-
-            const location = document.getElementById('location').value;
-            const customLocation = document.getElementById('custom-location').value.trim();
-            const maxPlaces = parseInt(document.getElementById('max-places').value);
-            const searchMode = document.getElementById('search-mode').value;
-            const skipClosed = document.getElementById('skip-closed').checked;
-
-            let locationValue = location === 'custom' ? customLocation : location;
-
-            response = await fetch('/.netlify/functions/search-places', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    apifyApiKey: apifyKey,
-                    brandName,
-                    location: locationValue,
-                    maxPlaces,
-                    searchMode,
-                    skipClosed
-                })
-            });
-        } else {
-            // URL mode
-            const urls = document.getElementById('manual-urls').value
-                .split('\n')
-                .map(u => u.trim())
-                .filter(u => u.length > 0);
-
-            if (urls.length === 0) {
-                alert('Inserisci almeno un URL');
-                return;
-            }
-
-            response = await fetch('/.netlify/functions/parse-manual-urls', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ urls })
-            });
-        }
-
-        const data = await response.json();
-
-        if (!data.success) {
-            throw new Error(data.error || 'Search failed');
-        }
-
-        if (state.currentMode === 'brand') {
-            // Start polling for brand search
-            state.searchRunId = data.runId;
-            await pollSearchStatus();
-        } else {
-            // URL mode returns places directly
-            state.searchResults = data.places;
-            displayPlaces();
-        }
-
-    } catch (error) {
-        console.error('Search error:', error);
-        alert(`❌ Errore durante la ricerca: ${error.message}`);
-        showStep(1);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '🔍 Cerca Schede';
+    if (!apifyKey) {
+      alert('⚠️ Apify API Key non configurata. Vai su Moca Hub → Configurations');
+      return;
     }
+
+    // Show progress
+    showStep(3);
+    updateProgress(10, 'Avvio ricerca...');
+
+    let response;
+
+    if (state.currentMode === 'brand') {
+      // Brand search mode
+      const brandName = document.getElementById('brand-name').value.trim();
+      if (!brandName) {
+        alert('Inserisci un nome brand');
+        return;
+      }
+
+      const location = document.getElementById('location').value;
+      const customLocation = document.getElementById('custom-location').value.trim();
+      const maxPlaces = parseInt(document.getElementById('max-places').value);
+      const searchMode = document.getElementById('search-mode').value;
+      const skipClosed = document.getElementById('skip-closed').checked;
+
+      let locationValue = location === 'custom' ? customLocation : location;
+
+      response = await fetch('/.netlify/functions/search-places', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apifyApiKey: apifyKey,
+          brandName,
+          location: locationValue,
+          maxPlaces,
+          searchMode,
+          skipClosed
+        })
+      });
+    } else {
+      // URL mode
+      const urls = document.getElementById('manual-urls').value
+        .split('\n')
+        .map(u => u.trim())
+        .filter(u => u.length > 0);
+
+      if (urls.length === 0) {
+        alert('Inserisci almeno un URL');
+        return;
+      }
+
+      response = await fetch('/.netlify/functions/parse-manual-urls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls })
+      });
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Search failed');
+    }
+
+    if (state.currentMode === 'brand') {
+      // Start polling for brand search
+      state.searchRunId = data.runId;
+      await pollSearchStatus();
+    } else {
+      // URL mode returns places directly
+      state.searchResults = data.places;
+      displayPlaces();
+    }
+
+  } catch (error) {
+    console.error('Search error:', error);
+    alert(`❌ Errore durante la ricerca: ${error.message}`);
+    showStep(1);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Cerca Schede';
+  }
 }
 
 // ========================================
 // Poll Search Status
 // ========================================
 async function pollSearchStatus() {
-    const apifyKey = state.moca.getConfig('APIFY_API_KEY');
-    const maxAttempts = 300; // 10 minutes max (2s interval)
-    let attempts = 0;
+  const apifyKey = state.moca.getConfig('APIFY_API_KEY');
+  const maxAttempts = 300; // 10 minutes max (2s interval)
+  let attempts = 0;
 
-    const poll = async () => {
-        attempts++;
-        updateProgress(10 + (attempts / maxAttempts) * 40, `Ricerca in corso... Tentativo ${attempts}`);
+  const poll = async () => {
+    attempts++;
+    updateProgress(10 + (attempts / maxAttempts) * 40, `Ricerca in corso... Tentativo ${attempts}`);
 
-        const response = await fetch('/.netlify/functions/check-search-status', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                apifyApiKey: apifyKey,
-                runId: state.searchRunId
-            })
-        });
+    const response = await fetch('/.netlify/functions/check-search-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apifyApiKey: apifyKey,
+        runId: state.searchRunId
+      })
+    });
 
-        const data = await response.json();
+    const data = await response.json();
 
-        if (data.status === 'SUCCEEDED') {
-            updateProgress(50, 'Ricerca completata!');
-            state.searchResults = data.places;
-            displayPlaces();
-            return;
-        }
+    if (data.status === 'SUCCEEDED') {
+      updateProgress(50, 'Ricerca completata!');
+      state.searchResults = data.places;
+      displayPlaces();
+      return;
+    }
 
-        if (data.status === 'FAILED') {
-            throw new Error(data.error || 'Search failed');
-        }
+    if (data.status === 'FAILED') {
+      throw new Error(data.error || 'Search failed');
+    }
 
-        if (attempts >= maxAttempts) {
-            throw new Error('Search timeout');
-        }
+    if (attempts >= maxAttempts) {
+      throw new Error('Search timeout');
+    }
 
-        setTimeout(poll, 2000);
-    };
+    setTimeout(poll, 2000);
+  };
 
-    await poll();
+  await poll();
 }
 
 // ========================================
 // Display Places for Selection
 // ========================================
 function displayPlaces() {
-    const list = document.getElementById('places-list');
-    list.innerHTML = '';
+  const list = document.getElementById('places-list');
+  list.innerHTML = '';
 
-    if (state.searchResults.length === 0) {
-        list.innerHTML = '<p class="empty-state">Nessuna scheda trovata</p>';
-        showStep(1);
-        return;
-    }
+  if (state.searchResults.length === 0) {
+    list.innerHTML = '<p class="empty-state">Nessuna scheda trovata</p>';
+    showStep(1);
+    return;
+  }
 
-    state.searchResults.forEach((place, index) => {
-        const item = document.createElement('div');
-        item.className = 'place-item';
-        item.innerHTML = `
+  state.searchResults.forEach((place, index) => {
+    const item = document.createElement('div');
+    item.className = 'place-item';
+    item.innerHTML = `
       <input type="checkbox" id="place-${index}" checked>
       <div class="place-info">
         <div class="place-title">${place.title}</div>
@@ -276,197 +277,206 @@ function displayPlaces() {
         </div>
       </div>
     `;
-        list.appendChild(item);
-    });
+    list.appendChild(item);
+  });
 
-    showStep(2);
+  showStep(2);
 }
 
 // ========================================
 // Toggle All Places
 // ========================================
 function toggleAllPlaces(checked) {
-    document.querySelectorAll('.place-item input[type="checkbox"]').forEach(cb => {
-        cb.checked = checked;
-    });
+  document.querySelectorAll('.place-item input[type="checkbox"]').forEach(cb => {
+    cb.checked = checked;
+  });
 }
 
 // ========================================
 // Start Scraping
 // ========================================
 async function handleStartScrape() {
-    // Get selected places
-    const selectedIndices = [];
-    document.querySelectorAll('.place-item input[type="checkbox"]').forEach((cb, idx) => {
-        if (cb.checked) selectedIndices.push(idx);
+  // Get selected places
+  const selectedIndices = [];
+  document.querySelectorAll('.place-item input[type="checkbox"]').forEach((cb, idx) => {
+    if (cb.checked) selectedIndices.push(idx);
+  });
+
+  if (selectedIndices.length === 0) {
+    alert('Seleziona almeno una scheda');
+    return;
+  }
+
+  state.selectedPlaces = selectedIndices.map(i => state.searchResults[i]);
+
+  showStep(3);
+  updateProgress(0, 'Avvio scraping...');
+
+  try {
+    const apifyKey = state.moca.getConfig('APIFY_API_KEY');
+    const maxReviews = state.currentMode === 'brand'
+      ? parseInt(document.getElementById('max-reviews').value)
+      : parseInt(document.getElementById('max-reviews-url').value);
+
+    // Start scrape - pass places with their original URLs
+    const response = await fetch('/.netlify/functions/start-scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apifyApiKey: apifyKey,
+        places: state.selectedPlaces,
+        maxReviews
+      })
     });
 
-    if (selectedIndices.length === 0) {
-        alert('Seleziona almeno una scheda');
-        return;
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to start scrape');
     }
 
-    state.selectedPlaces = selectedIndices.map(i => state.searchResults[i]);
+    state.scrapeRunId = data.runId;
+    state.placesMetadata = data.placesMetadata || state.selectedPlaces;
+    await pollScrapeStatus();
 
-    showStep(3);
-    updateProgress(0, 'Avvio scraping...');
-
-    try {
-        const apifyKey = state.moca.getConfig('APIFY_API_KEY');
-        const maxReviews = state.currentMode === 'brand'
-            ? parseInt(document.getElementById('max-reviews').value)
-            : parseInt(document.getElementById('max-reviews-url').value);
-
-        // Start scrape
-        const response = await fetch('/.netlify/functions/start-scrape', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                apifyApiKey: apifyKey,
-                places: state.selectedPlaces,
-                maxReviews
-            })
-        });
-
-        const data = await response.json();
-
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to start scrape');
-        }
-
-        state.scrapeRunId = data.runId;
-        await pollScrapeStatus();
-
-    } catch (error) {
-        console.error('Scrape error:', error);
-        alert(`❌ Errore durante lo scraping: ${error.message}`);
-        showStep(2);
-    }
+  } catch (error) {
+    console.error('Scrape error:', error);
+    alert(`❌ Errore durante lo scraping: ${error.message}`);
+    showStep(2);
+  }
 }
 
 // ========================================
 // Poll Scrape Status
 // ========================================
 async function pollScrapeStatus() {
-    const apifyKey = state.moca.getConfig('APIFY_API_KEY');
-    const aiEnabled = document.getElementById('enable-ai').checked;
-    const openaiKey = aiEnabled ? state.moca.getConfig('OPENAI_API_KEY') : null;
-    const openaiModel = document.getElementById('openai-model').value;
+  const apifyKey = state.moca.getConfig('APIFY_API_KEY');
+  const aiEnabled = document.getElementById('enable-ai').checked;
+  const openaiKey = aiEnabled ? state.moca.getConfig('OPENAI_API_KEY') : null;
+  const openaiModel = document.getElementById('openai-model').value;
 
-    if (aiEnabled && !openaiKey) {
-        alert('⚠️ OpenAI API Key non configurata. Vai su Moca Hub → Configurations');
-        return;
+  if (aiEnabled && !openaiKey) {
+    alert('⚠️ OpenAI API Key non configurata. Vai su Moca Hub → Configurations');
+    return;
+  }
+
+  const maxAttempts = 200; // ~10 minutes max (3s interval)
+  let attempts = 0;
+
+  const poll = async () => {
+    attempts++;
+    const elapsed = Math.round(attempts * 3);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    updateProgress(
+      Math.min(90, 10 + (attempts / maxAttempts) * 80),
+      `Scraping in corso... ${timeStr} trascorsi`
+    );
+
+    const response = await fetch('/.netlify/functions/check-scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apifyApiKey: apifyKey,
+        runId: state.scrapeRunId,
+        aiEnabled,
+        openaiApiKey: openaiKey,
+        openaiModel,
+        placesMetadata: state.placesMetadata
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.status === 'SUCCEEDED') {
+      updateProgress(100, '✅ Completato!');
+      state.scrapeResults = data.results;
+      displayResults();
+      saveToHistory();
+      return;
     }
 
-    const maxAttempts = 100; // 5 minutes max (3s interval)
-    let attempts = 0;
+    if (data.status === 'FAILED') {
+      throw new Error(data.error || 'Scrape failed');
+    }
 
-    const poll = async () => {
-        attempts++;
-        updateProgress(10 + (attempts / maxAttempts) * 80, `Scraping in corso... Tentativo ${attempts}`);
+    if (attempts >= maxAttempts) {
+      throw new Error('Scrape timeout - troppo tempo trascorso (10 min)');
+    }
 
-        const response = await fetch('/.netlify/functions/check-scrape', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                apifyApiKey: apifyKey,
-                runId: state.scrapeRunId,
-                aiEnabled,
-                openaiApiKey: openaiKey,
-                openaiModel
-            })
-        });
+    setTimeout(poll, 3000);
+  };
 
-        const data = await response.json();
-
-        if (data.status === 'SUCCEEDED') {
-            updateProgress(100, 'Completato!');
-            state.scrapeResults = data.results;
-            displayResults();
-            saveToHistory();
-            return;
-        }
-
-        if (data.status === 'FAILED') {
-            throw new Error(data.error || 'Scrape failed');
-        }
-
-        if (attempts >= maxAttempts) {
-            throw new Error('Scrape timeout');
-        }
-
-        setTimeout(poll, 3000);
-    };
-
-    await poll();
+  await poll();
 }
 
 // ========================================
 // Display Results
 // ========================================
 function displayResults() {
-    const { places, aggregateStats } = state.scrapeResults;
+  const { places, aggregateStats } = state.scrapeResults;
 
-    // Create tabs
-    const tabsNav = document.getElementById('tabs-nav');
-    const tabsContent = document.getElementById('tabs-content');
+  // Create tabs
+  const tabsNav = document.getElementById('tabs-nav');
+  const tabsContent = document.getElementById('tabs-content');
 
-    tabsNav.innerHTML = '';
-    tabsContent.innerHTML = '';
+  tabsNav.innerHTML = '';
+  tabsContent.innerHTML = '';
 
-    // Overview tab
-    const overviewTab = createTabButton('overview', '📊 Panoramica', true);
-    tabsNav.appendChild(overviewTab);
+  // Overview tab
+  const overviewTab = createTabButton('overview', '📊 Panoramica', true);
+  tabsNav.appendChild(overviewTab);
 
-    const overviewContent = createOverviewTab(aggregateStats, places);
-    tabsContent.appendChild(overviewContent);
+  const overviewContent = createOverviewTab(aggregateStats, places);
+  tabsContent.appendChild(overviewContent);
 
-    // Individual place tabs
-    places.forEach((place, idx) => {
-        const placeTab = createTabButton(`place-${idx}`, `📍 ${place.title}`);
-        tabsNav.appendChild(placeTab);
+  // Individual place tabs
+  places.forEach((place, idx) => {
+    const placeTab = createTabButton(`place-${idx}`, `📍 ${place.title}`);
+    tabsNav.appendChild(placeTab);
 
-        const placeContent = createPlaceTab(place, idx);
-        tabsContent.appendChild(placeContent);
-    });
+    const placeContent = createPlaceTab(place, idx);
+    tabsContent.appendChild(placeContent);
+  });
 
-    showStep(4);
+  showStep(4);
 }
 
 // ========================================
 // Create Tab Button
 // ========================================
 function createTabButton(id, label, active = false) {
-    const btn = document.createElement('button');
-    btn.className = `tab-btn ${active ? 'active' : ''}`;
-    btn.textContent = label;
-    btn.onclick = () => switchTab(id);
-    return btn;
+  const btn = document.createElement('button');
+  btn.className = `tab-btn ${active ? 'active' : ''}`;
+  btn.textContent = label;
+  btn.onclick = () => switchTab(id);
+  return btn;
 }
 
 // ========================================
 // Switch Tab
 // ========================================
 function switchTab(tabId) {
-    // Update buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+  // Update buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.classList.add('active');
 
-    // Update content
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    document.getElementById(`tab-${tabId}`).classList.add('active');
+  // Update content
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  document.getElementById(`tab-${tabId}`).classList.add('active');
 }
 
 // ========================================
 // Create Overview Tab
 // ========================================
 function createOverviewTab(stats, places) {
-    const div = document.createElement('div');
-    div.id = 'tab-overview';
-    div.className = 'tab-content active';
+  const div = document.createElement('div');
+  div.id = 'tab-overview';
+  div.className = 'tab-content active';
 
-    // Statistics grid
-    div.innerHTML = `
+  // Statistics grid
+  div.innerHTML = `
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">${stats.totalPlaces}</div>
@@ -499,9 +509,9 @@ function createOverviewTab(stats, places) {
         <div class="chart-title">Distribuzione Stelle</div>
         <div class="chart-bars">
           ${[5, 4, 3, 2, 1].map(stars => {
-        const count = stats.distribution[stars] || 0;
-        const percent = stats.totalReviews > 0 ? (count / stats.totalReviews) * 100 : 0;
-        return `
+    const count = stats.distribution[stars] || 0;
+    const percent = stats.totalReviews > 0 ? (count / stats.totalReviews) * 100 : 0;
+    return `
               <div class="chart-bar-row">
                 <div class="chart-bar-label">${stars} ⭐</div>
                 <div class="chart-bar-container">
@@ -511,7 +521,7 @@ function createOverviewTab(stats, places) {
                 </div>
               </div>
             `;
-    }).join('')}
+  }).join('')}
         </div>
       </div>
       
@@ -547,47 +557,47 @@ function createOverviewTab(stats, places) {
     </div>
   `;
 
-    // Add AI section if available
-    if (places.some(p => p.analysis)) {
-        const aiSection = createAISection(stats.topKeywords, null, true);
-        div.appendChild(aiSection);
-    }
+  // Add AI section if available
+  if (places.some(p => p.analysis)) {
+    const aiSection = createAISection(stats.topKeywords, null, true);
+    div.appendChild(aiSection);
+  }
 
-    return div;
+  return div;
 }
 
 // ========================================
 // Create Place Tab
 // ========================================
 function createPlaceTab(place, index) {
-    const div = document.createElement('div');
-    div.id = `tab-place-${index}`;
-    div.className = 'tab-content';
+  const div = document.createElement('div');
+  div.id = `tab-place-${index}`;
+  div.className = 'tab-content';
 
-    // Calculate place-specific stats
-    const reviews = place.reviews || [];
-    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    const sentiment = { positive: 0, neutral: 0, negative: 0 };
+  // Calculate place-specific stats
+  const reviews = place.reviews || [];
+  const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const sentiment = { positive: 0, neutral: 0, negative: 0 };
 
-    reviews.forEach(r => {
-        const stars = r.stars || 0;
-        if (stars >= 1 && stars <= 5) {
-            distribution[stars]++;
-            if (stars >= 4) sentiment.positive++;
-            else if (stars === 3) sentiment.neutral++;
-            else sentiment.negative++;
-        }
-    });
+  reviews.forEach(r => {
+    const stars = r.stars || 0;
+    if (stars >= 1 && stars <= 5) {
+      distribution[stars]++;
+      if (stars >= 4) sentiment.positive++;
+      else if (stars === 3) sentiment.neutral++;
+      else sentiment.negative++;
+    }
+  });
 
-    const reviewsWithText = reviews.filter(r => r.text && r.text.trim().length > 0).length;
-    const reviewsWithResponse = reviews.filter(r => r.responseFromOwner && r.responseFromOwner.trim().length > 0).length;
+  const reviewsWithText = reviews.filter(r => r.text && r.text.trim().length > 0).length;
+  const reviewsWithResponse = reviews.filter(r => r.responseFromOwner && r.responseFromOwner.trim().length > 0).length;
 
-    const totalReviews = reviews.length;
-    const positivePercent = totalReviews > 0 ? Math.round((sentiment.positive / totalReviews) * 100) : 0;
-    const neutralPercent = totalReviews > 0 ? Math.round((sentiment.neutral / totalReviews) * 100) : 0;
-    const negativePercent = totalReviews > 0 ? Math.round((sentiment.negative / totalReviews) * 100) : 0;
+  const totalReviews = reviews.length;
+  const positivePercent = totalReviews > 0 ? Math.round((sentiment.positive / totalReviews) * 100) : 0;
+  const neutralPercent = totalReviews > 0 ? Math.round((sentiment.neutral / totalReviews) * 100) : 0;
+  const negativePercent = totalReviews > 0 ? Math.round((sentiment.negative / totalReviews) * 100) : 0;
 
-    div.innerHTML = `
+  div.innerHTML = `
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">${place.rating || 'N/A'}</div>
@@ -620,9 +630,9 @@ function createPlaceTab(place, index) {
         <div class="chart-title">Distribuzione Stelle</div>
         <div class="chart-bars">
           ${[5, 4, 3, 2, 1].map(stars => {
-        const count = distribution[stars] || 0;
-        const percent = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
-        return `
+    const count = distribution[stars] || 0;
+    const percent = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
+    return `
               <div class="chart-bar-row">
                 <div class="chart-bar-label">${stars} ⭐</div>
                 <div class="chart-bar-container">
@@ -632,7 +642,7 @@ function createPlaceTab(place, index) {
                 </div>
               </div>
             `;
-    }).join('')}
+  }).join('')}
         </div>
       </div>
       
@@ -668,36 +678,36 @@ function createPlaceTab(place, index) {
     </div>
   `;
 
-    // Add AI section if available
-    if (place.analysis) {
-        const keywords = extractKeywordsFromReviews(reviews.filter(r => r.text));
-        const aiSection = createAISection(keywords, place.analysis, false);
-        div.appendChild(aiSection);
-    }
+  // Add AI section if available
+  if (place.analysis) {
+    const keywords = extractKeywordsFromReviews(reviews.filter(r => r.text));
+    const aiSection = createAISection(keywords, place.analysis, false);
+    div.appendChild(aiSection);
+  }
 
-    return div;
+  return div;
 }
 
 // ========================================
 // Create AI Section
 // ========================================
 function createAISection(keywords, analysis, isOverview) {
-    const section = document.createElement('div');
-    section.className = 'ai-section-results';
+  const section = document.createElement('div');
+  section.className = 'ai-section-results';
 
-    let html = '<h3>🤖 Analisi AI</h3>';
+  let html = '<h3>🤖 Analisi AI</h3>';
 
-    // Wordcloud
-    html += '<div class="wordcloud">';
-    keywords.slice(0, 30).forEach(item => {
-        const size = Math.max(0.8, Math.min(2, item.count / 10));
-        html += `<span class="wordcloud-item" style="font-size: ${size}rem">${item.word} (${item.count})</span>`;
-    });
-    html += '</div>';
+  // Wordcloud
+  html += '<div class="wordcloud">';
+  keywords.slice(0, 30).forEach(item => {
+    const size = Math.max(0.8, Math.min(2, item.count / 10));
+    html += `<span class="wordcloud-item" style="font-size: ${size}rem">${item.word} (${item.count})</span>`;
+  });
+  html += '</div>';
 
-    // Analysis (if available for individual place)
-    if (analysis) {
-        html += `
+  // Analysis (if available for individual place)
+  if (analysis) {
+    html += `
       <div class="priorities-list">
         <h4>🎯 Top 3 Priorità</h4>
         <ol>
@@ -735,197 +745,197 @@ function createAISection(keywords, analysis, isOverview) {
         </ul>
       </div>
     `;
-    }
+  }
 
-    section.innerHTML = html;
-    return section;
+  section.innerHTML = html;
+  return section;
 }
 
 // ========================================
 // Extract Keywords from Reviews
 // ========================================
 function extractKeywordsFromReviews(reviews) {
-    const stopwords = new Set([
-        'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'di', 'a', 'da', 'in', 'con', 'su', 'per',
-        'tra', 'fra', 'e', 'ed', 'anche', 'se', 'ma', 'però', 'che', 'chi', 'cui', 'quale', 'quando',
-        'dove', 'come', 'perché', 'perchè', 'questo', 'quello', 'questi', 'quelli', 'questa', 'quella',
-        'molto', 'poco', 'più', 'meno', 'tanto', 'troppo', 'tutto', 'ogni', 'ciascuno', 'alcuni',
-        'essere', 'avere', 'fare', 'stare', 'andare', 'venire', 'dovere', 'potere', 'volere', 'sapere',
-        'sono', 'è', 'ho', 'ha', 'hanno', 'era', 'erano', 'stato', 'stati', 'stata', 'state', 'fatto',
-        'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'is', 'was', 'are',
-        'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should',
-        'could', 'can', 'may', 'might', 'must', 'this', 'that', 'these', 'those', 'it', 'its', 'my',
-        'your', 'his', 'her', 'their', 'our', 'me', 'you', 'him', 'she', 'them', 'us', 'non', 'mi'
-    ]);
+  const stopwords = new Set([
+    'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'di', 'a', 'da', 'in', 'con', 'su', 'per',
+    'tra', 'fra', 'e', 'ed', 'anche', 'se', 'ma', 'però', 'che', 'chi', 'cui', 'quale', 'quando',
+    'dove', 'come', 'perché', 'perchè', 'questo', 'quello', 'questi', 'quelli', 'questa', 'quella',
+    'molto', 'poco', 'più', 'meno', 'tanto', 'troppo', 'tutto', 'ogni', 'ciascuno', 'alcuni',
+    'essere', 'avere', 'fare', 'stare', 'andare', 'venire', 'dovere', 'potere', 'volere', 'sapere',
+    'sono', 'è', 'ho', 'ha', 'hanno', 'era', 'erano', 'stato', 'stati', 'stata', 'state', 'fatto',
+    'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'is', 'was', 'are',
+    'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should',
+    'could', 'can', 'may', 'might', 'must', 'this', 'that', 'these', 'those', 'it', 'its', 'my',
+    'your', 'his', 'her', 'their', 'our', 'me', 'you', 'him', 'she', 'them', 'us', 'non', 'mi'
+  ]);
 
-    const wordCounts = new Map();
+  const wordCounts = new Map();
 
-    reviews.forEach(review => {
-        if (!review.text) return;
+  reviews.forEach(review => {
+    if (!review.text) return;
 
-        const words = review.text.toLowerCase()
-            .replace(/[^\w\sàèéìòù]/g, ' ')
-            .split(/\s+/)
-            .filter(word => word.length >= 4 && !stopwords.has(word) && !/^\d+$/.test(word));
+    const words = review.text.toLowerCase()
+      .replace(/[^\w\sàèéìòù]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length >= 4 && !stopwords.has(word) && !/^\d+$/.test(word));
 
-        words.forEach(word => {
-            wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
-        });
+    words.forEach(word => {
+      wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
     });
+  });
 
-    return Array.from(wordCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 30)
-        .map(([word, count]) => ({ word, count }));
+  return Array.from(wordCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 30)
+    .map(([word, count]) => ({ word, count }));
 }
 
 // ========================================
 // Export Functions
 // ========================================
 function exportJSON() {
-    const data = JSON.stringify(state.scrapeResults, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `gmrs-results-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const data = JSON.stringify(state.scrapeResults, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gmrs-results-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function exportCSV() {
-    const { places } = state.scrapeResults;
+  const { places } = state.scrapeResults;
 
-    const headers = [
-        'Place Name', 'Address', 'Total Rating', 'Reviews Count', 'URL',
-        'Review ID', 'Author Name', 'Author URL', 'Review Text',
-        'Stars', 'Published Date', 'Response Text', 'Likes Count'
-    ];
+  const headers = [
+    'Place Name', 'Address', 'Total Rating', 'Reviews Count', 'URL',
+    'Review ID', 'Author Name', 'Author URL', 'Review Text',
+    'Stars', 'Published Date', 'Response Text', 'Likes Count'
+  ];
 
-    let csv = headers.join(',') + '\n';
+  let csv = headers.join(',') + '\n';
 
-    places.forEach(place => {
-        place.reviews.forEach(review => {
-            const row = [
-                escapeCSV(place.title),
-                escapeCSV(place.address),
-                place.rating || '',
-                place.totalReviews || '',
-                escapeCSV(place.url),
-                escapeCSV(review.id),
-                escapeCSV(review.authorName),
-                escapeCSV(review.authorUrl),
-                escapeCSV(review.text),
-                review.stars || '',
-                review.publishedAtDate || '',
-                escapeCSV(review.responseFromOwner),
-                review.likesCount || ''
-            ];
-            csv += row.join(',') + '\n';
-        });
+  places.forEach(place => {
+    place.reviews.forEach(review => {
+      const row = [
+        escapeCSV(place.title),
+        escapeCSV(place.address),
+        place.rating || '',
+        place.totalReviews || '',
+        escapeCSV(place.url),
+        escapeCSV(review.id),
+        escapeCSV(review.authorName),
+        escapeCSV(review.authorUrl),
+        escapeCSV(review.text),
+        review.stars || '',
+        review.publishedAtDate || '',
+        escapeCSV(review.responseFromOwner),
+        review.likesCount || ''
+      ];
+      csv += row.join(',') + '\n';
     });
+  });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `gmrs-results-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gmrs-results-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function escapeCSV(str) {
-    if (!str) return '';
-    str = str.toString().replace(/"/g, '""');
-    return `"${str}"`;
+  if (!str) return '';
+  str = str.toString().replace(/"/g, '""');
+  return `"${str}"`;
 }
 
 async function exportPDF() {
-    alert('📄 Generazione PDF in corso... Questa operazione potrebbe richiedere alcuni secondi.');
+  alert('📄 Generazione PDF in corso... Questa operazione potrebbe richiedere alcuni secondi.');
 
-    // Note: Full PDF generation with jsPDF would be implemented here
-    // For brevity, showing the structure
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+  // Note: Full PDF generation with jsPDF would be implemented here
+  // For brevity, showing the structure
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
 
-    // Add branding
-    doc.setFontSize(20);
-    doc.setTextColor(229, 34, 23);
-    doc.text('Google Maps Reviews Scraper', 20, 20);
+  // Add branding
+  doc.setFontSize(20);
+  doc.setTextColor(229, 34, 23);
+  doc.text('Google Maps Reviews Scraper', 20, 20);
 
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Cliente: ${state.moca.getClient().name}`, 20, 30);
-    doc.text(`Data: ${new Date().toLocaleDateString('it-IT')}`, 20, 37);
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`Cliente: ${state.moca.getClient().name}`, 20, 30);
+  doc.text(`Data: ${new Date().toLocaleDateString('it-IT')}`, 20, 37);
 
-    // Add statistics
-    const stats = state.scrapeResults.aggregateStats;
-    doc.text(`Schede Analizzate: ${stats.totalPlaces}`, 20, 50);
-    doc.text(`Totale Recensioni: ${stats.totalReviews}`, 20, 57);
-    doc.text(`Rating Medio: ${stats.avgRating}`, 20, 64);
+  // Add statistics
+  const stats = state.scrapeResults.aggregateStats;
+  doc.text(`Schede Analizzate: ${stats.totalPlaces}`, 20, 50);
+  doc.text(`Totale Recensioni: ${stats.totalReviews}`, 20, 57);
+  doc.text(`Rating Medio: ${stats.avgRating}`, 20, 64);
 
-    // Save
-    doc.save(`gmrs-report-${Date.now()}.pdf`);
+  // Save
+  doc.save(`gmrs-report-${Date.now()}.pdf`);
 }
 
 // ========================================
 // History Management
 // ========================================
 function saveToHistory() {
-    const history = getHistory();
+  const history = getHistory();
 
-    // Prevent duplicates (same brand/mode within 1 minute)
-    const now = Date.now();
-    const isDuplicate = history.some(h => {
-        const timeDiff = now - h.timestamp;
-        const sameMode = h.mode === state.currentMode;
-        const sameBrand = state.currentMode === 'brand' && h.brandName === document.getElementById('brand-name').value.trim();
-        return timeDiff < 60000 && sameMode && (state.currentMode === 'url' || sameBrand);
-    });
+  // Prevent duplicates (same brand/mode within 1 minute)
+  const now = Date.now();
+  const isDuplicate = history.some(h => {
+    const timeDiff = now - h.timestamp;
+    const sameMode = h.mode === state.currentMode;
+    const sameBrand = state.currentMode === 'brand' && h.brandName === document.getElementById('brand-name').value.trim();
+    return timeDiff < 60000 && sameMode && (state.currentMode === 'url' || sameBrand);
+  });
 
-    if (isDuplicate) {
-        console.log('[GMRS] Duplicate search, not saving to history');
-        return;
-    }
+  if (isDuplicate) {
+    console.log('[GMRS] Duplicate search, not saving to history');
+    return;
+  }
 
-    const entry = {
-        id: Date.now(),
-        timestamp: now,
-        mode: state.currentMode,
-        brandName: state.currentMode === 'brand' ? document.getElementById('brand-name').value.trim() : null,
-        placesCount: state.scrapeResults.places.length,
-        reviewsCount: state.scrapeResults.aggregateStats.totalReviews,
-        aiEnabled: document.getElementById('enable-ai').checked,
-        results: state.scrapeResults
-    };
+  const entry = {
+    id: Date.now(),
+    timestamp: now,
+    mode: state.currentMode,
+    brandName: state.currentMode === 'brand' ? document.getElementById('brand-name').value.trim() : null,
+    placesCount: state.scrapeResults.places.length,
+    reviewsCount: state.scrapeResults.aggregateStats.totalReviews,
+    aiEnabled: document.getElementById('enable-ai').checked,
+    results: state.scrapeResults
+  };
 
-    history.unshift(entry);
+  history.unshift(entry);
 
-    // Keep max 20
-    if (history.length > 20) {
-        history.splice(20);
-    }
+  // Keep max 20
+  if (history.length > 20) {
+    history.splice(20);
+  }
 
-    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
-    console.log('[GMRS] Saved to history');
+  localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+  console.log('[GMRS] Saved to history');
 }
 
 function getHistory() {
-    try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || '[]');
-    } catch {
-        return [];
-    }
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || '[]');
+  } catch {
+    return [];
+  }
 }
 
 function openHistoryModal() {
-    const history = getHistory();
-    const list = document.getElementById('history-list');
+  const history = getHistory();
+  const list = document.getElementById('history-list');
 
-    if (history.length === 0) {
-        list.innerHTML = '<div class="empty-state"><p>Nessuna ricerca salvata</p></div>';
-    } else {
-        list.innerHTML = history.map(entry => `
+  if (history.length === 0) {
+    list.innerHTML = '<div class="empty-state"><p>Nessuna ricerca salvata</p></div>';
+  } else {
+    list.innerHTML = history.map(entry => `
       <div class="history-item">
         <div class="history-icon">${entry.mode === 'brand' ? '🔍' : '🔗'}</div>
         <div class="history-info">
@@ -942,37 +952,37 @@ function openHistoryModal() {
         </div>
       </div>
     `).join('');
-    }
+  }
 
-    document.getElementById('history-modal').classList.add('active');
+  document.getElementById('history-modal').classList.add('active');
 }
 
 function closeHistoryModal() {
-    document.getElementById('history-modal').classList.remove('active');
+  document.getElementById('history-modal').classList.remove('active');
 }
 
 function loadFromHistory(id) {
-    const history = getHistory();
-    const entry = history.find(h => h.id === id);
+  const history = getHistory();
+  const entry = history.find(h => h.id === id);
 
-    if (!entry) return;
+  if (!entry) return;
 
-    state.scrapeResults = entry.results;
-    displayResults();
-    closeHistoryModal();
+  state.scrapeResults = entry.results;
+  displayResults();
+  closeHistoryModal();
 }
 
 function deleteFromHistory(id) {
-    let history = getHistory();
-    history = history.filter(h => h.id !== id);
-    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
-    openHistoryModal(); // Refresh
+  let history = getHistory();
+  history = history.filter(h => h.id !== id);
+  localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+  openHistoryModal(); // Refresh
 }
 
 function clearAllHistory() {
-    if (!confirm('Sei sicuro di voler cancellare tutto lo storico?')) return;
-    localStorage.removeItem(STORAGE_KEYS.HISTORY);
-    openHistoryModal(); // Refresh
+  if (!confirm('Sei sicuro di voler cancellare tutto lo storico?')) return;
+  localStorage.removeItem(STORAGE_KEYS.HISTORY);
+  openHistoryModal(); // Refresh
 }
 
 // Make functions global for onclick handlers
@@ -983,13 +993,13 @@ window.deleteFromHistory = deleteFromHistory;
 // UI Utilities
 // ========================================
 function showStep(step) {
-    for (let i = 1; i <= 4; i++) {
-        const el = document.getElementById(`step-${i}`);
-        if (el) el.style.display = i === step ? 'block' : 'none';
-    }
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(`step-${i}`);
+    if (el) el.style.display = i === step ? 'block' : 'none';
+  }
 }
 
 function updateProgress(percent, text) {
-    document.getElementById('progress-fill').style.width = `${percent}%`;
-    document.getElementById('progress-text').textContent = text;
+  document.getElementById('progress-fill').style.width = `${percent}%`;
+  document.getElementById('progress-text').textContent = text;
 }
