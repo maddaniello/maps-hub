@@ -384,19 +384,24 @@ async function pollScrapeStatus() {
       body: JSON.stringify({
         apifyApiKey: apifyKey,
         runId: state.scrapeRunId,
-        aiEnabled,
-        openaiApiKey: openaiKey,
-        openaiModel,
-        placesMetadata: state.placesMetadata
+        // AI params removed from here - handled client side now
       })
     });
 
     const data = await response.json();
 
     if (data.status === 'SUCCEEDED') {
-      updateProgress(100, '✅ Completato!');
+      updateProgress(100, '✅ Scraping Completato!');
       state.scrapeResults = data.results;
+
+      // Display initial results immediately (without AI)
       displayResults();
+
+      // Start AI analysis if enabled
+      if (aiEnabled) {
+        await performAIAnalysis(openaiKey, openaiModel);
+      }
+
       saveToHistory();
       return;
     }
@@ -413,6 +418,111 @@ async function pollScrapeStatus() {
   };
 
   await poll();
+}
+
+// ========================================
+// Client-Side AI Analysis Orchestration
+// ========================================
+async function performAIAnalysis(openaiKey, openaiModel) {
+  const { places } = state.scrapeResults;
+  const total = places.length;
+  // Get sampling state (default to true if element missing for safety)
+  const samplingElement = document.getElementById('ai-sampling');
+  const samplingEnabled = samplingElement ? samplingElement.checked : true;
+
+  // Show analysis progress bar
+  const progressContainer = document.querySelector('.progress-container');
+  if (progressContainer) progressContainer.style.display = 'block';
+
+  updateProgress(0, `Avvio analisi AI su ${total} schede (${samplingEnabled ? 'Campionamento' : 'Full'})...`);
+
+  // Analyze each place sequentially (or small batch) to avoid browser network limit
+  // Parallelizing 3 at a time is usually safe
+  const batchSize = 3;
+
+  for (let i = 0; i < total; i += batchSize) {
+    const batch = places.slice(i, i + batchSize);
+    const promises = batch.map(async (place) => {
+      // Skip if no reviews or already analyzed
+      if (!place.reviews || place.reviews.length === 0 || place.analysis) return;
+
+      try {
+        // Update UI placeholder? (Optional)
+
+        const response = await fetch('/.netlify/functions/analyze-place', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            openaiApiKey: openaiKey,
+            openaiModel: openaiModel,
+            placeName: place.title,
+            reviews: place.reviews,
+            samplingEnabled: samplingEnabled // Pass sampling preference
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.analysis) {
+          place.analysis = data.analysis;
+          // Refresh specific place tab if it's currently open (optimization) or just refresh all
+          // simpler to just refresh the UI for that place if possible, but full redraw is safer
+        }
+      } catch (e) {
+        console.error(`AI analysis failed for ${place.title}`, e);
+      }
+    });
+
+    await Promise.all(promises);
+
+    const percent = Math.round(((i + batch.length) / total) * 90);
+    updateProgress(percent, `Analisi AI: ${Math.min(i + batch.length, total)}/${total} schede completate`);
+
+    // Progressive update of UI - redraw to show new analysis
+    displayResults();
+  }
+
+  // After all individual places, do aggregated analysis
+  updateProgress(90, 'Analisi aggregata Brand...');
+
+  try {
+    // Prepare ALL reviews flat list
+    const allReviews = places.flatMap(p => p.reviews);
+    const brandName = places[0]?.title?.split('-')[0]?.trim() || 'Brand'; // Heuristic
+
+    const response = await fetch('/.netlify/functions/analyze-aggregated', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        openaiApiKey: openaiKey,
+        openaiModel: openaiModel,
+        reviews: allReviews,
+        brandName: brandName,
+        totalPlaces: total,
+        samplingEnabled: samplingEnabled // Pass sampling preference
+      })
+    });
+
+    const data = await response.json();
+    if (data.success && data.analysis) {
+      // Attach to aggregateStats or root
+      if (!state.scrapeResults.aggregateStats.aiStats) {
+        state.scrapeResults.aggregateStats.aiStats = {};
+      }
+      state.scrapeResults.aggregateStats.aiStats.analysis = data.analysis;
+    }
+
+  } catch (e) {
+    console.error('Aggregated analysis failed', e);
+  }
+
+  updateProgress(100, '✅ Analisi AI Completata!');
+  displayResults(); // Final redraw
+
+  // Hide progress after a delay
+  setTimeout(() => {
+    if (progressContainer) progressContainer.style.display = 'none';
+  }, 3000);
 }
 
 // ========================================
@@ -561,8 +671,12 @@ function createOverviewTab(stats, places) {
     </div>
   `;
 
-  // Add AI section if available
-  if (places.some(p => p.analysis)) {
+  // Add AI section if available (Updated for new Client-Side AI)
+  if (stats.aiStats && stats.aiStats.analysis) {
+    const aiSection = createAISection(stats.topKeywords, stats.aiStats.analysis, true);
+    div.appendChild(aiSection);
+  } else if (places.some(p => p.analysis)) {
+    // Fallback if partial analysis exists but not aggregated yet
     const aiSection = createAISection(stats.topKeywords, null, true);
     div.appendChild(aiSection);
   }

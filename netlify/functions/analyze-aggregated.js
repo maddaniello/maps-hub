@@ -23,17 +23,18 @@ exports.handler = async (event) => {
     try {
         const {
             openaiApiKey,
-            openaiModel = 'gpt-4o-mini',
-            placeName,
+            openaiModel = 'gpt-4o',
             reviews,
-            samplingEnabled = true // Default to true for backward compatibility
+            brandName,
+            totalPlaces,
+            samplingEnabled = true // Default to true
         } = JSON.parse(event.body);
 
-        if (!openaiApiKey || !placeName || !reviews) {
+        if (!openaiApiKey || !reviews || !brandName) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Missing required fields: openaiApiKey, placeName, reviews' })
+                body: JSON.stringify({ error: 'Missing required fields: openaiApiKey, reviews, brandName' })
             };
         }
 
@@ -49,28 +50,27 @@ exports.handler = async (event) => {
                 body: JSON.stringify({
                     success: true,
                     analysis: {
-                        strengths: ['Dati insufficienti per l\'analisi'],
-                        weaknesses: ['Nessuna recensione con testo disponibile'],
-                        priorities: ['Incoraggiare i clienti a lasciare recensioni dettagliate'],
-                        recommendations: ['Migliorare la quantità e qualità delle recensioni'],
-                        suggestions: ['Implementare campagne di richiesta recensioni']
+                        punti_forza: ['Dati insufficienti'],
+                        punti_debolezza: ['Nessuna recensione con testo'],
+                        temi_positivi: [],
+                        temi_negativi: [],
+                        suggerimenti_strategici: ['Incoraggiare recensioni testuali'],
+                        priorita: []
                     }
                 })
             };
         }
 
         let positiveReviews, negativeReviews;
-        let charLimit = 200;
+        let charLimit = 150;
         let analysisType = 'CAMPIONAMENTO (Presale)';
 
         if (samplingEnabled) {
-            // OPTIMIZATION: Sample 20 positive + 20 negative, truncate to 200 chars
-            positiveReviews = reviewsWithText.filter(r => (r.stars || 0) >= 4).slice(0, 20);
-            negativeReviews = reviewsWithText.filter(r => (r.stars || 0) <= 2).slice(0, 20);
+            // MATCHES PYTHON APP: Sample 30 positive + 30 negative, truncate to 150 chars
+            positiveReviews = reviewsWithText.filter(r => (r.stars || 0) >= 4).slice(0, 30);
+            negativeReviews = reviewsWithText.filter(r => (r.stars || 0) <= 2).slice(0, 30);
         } else {
             // FULL ANALYSIS
-            // Use all available reviews, but still limit char count slightly to avoid hitting context limits on huge datasets
-            // 1000 chars should be plenty for deep analysis without waste
             positiveReviews = reviewsWithText.filter(r => (r.stars || 0) >= 4);
             negativeReviews = reviewsWithText.filter(r => (r.stars || 0) <= 2);
             charLimit = 1000;
@@ -80,36 +80,38 @@ exports.handler = async (event) => {
         const positiveTexts = positiveReviews.map(r => `- ${(r.text || '').substring(0, charLimit)}`).join('\n');
         const negativeTexts = negativeReviews.map(r => `- ${(r.text || '').substring(0, charLimit)}`).join('\n');
 
-        const prompt = `Analizza le seguenti recensioni di Google Maps per "${placeName}".
+        const prompt = `Analizza queste recensioni AGGREGATE di ${totalPlaces || 'diverse'} schede Google Maps del brand "${brandName}".
 MODALITÀ: ${analysisType}
 
-RECENSIONI POSITIVE (${positiveReviews.length}):
-${positiveTexts || '- Nessuna recensione positiva con testo'}
+Totale recensioni analizzate: ${reviews.length}
+- Positive (4-5 stelle): ${reviews.filter(r => (r.stars || 0) >= 4).length}
+- Negative (1-2 stelle): ${reviews.filter(r => (r.stars || 0) <= 2).length}
 
-RECENSIONI NEGATIVE (${negativeReviews.length}):
-${negativeTexts || '- Nessuna recensione negativa con testo'}
+CAMPIONE RECENSIONI POSITIVE:
+${positiveTexts || '(Nessuna recensione positiva con testo)'}
 
-Totale recensioni: ${reviewsWithText.length}
+CAMPIONE RECENSIONI NEGATIVE:
+${negativeTexts || '(Nessuna recensione negativa con testo)'}
 
-Fornisci un'analisi strutturata in formato JSON con:
-{
-  "strengths": ["3-5 punti di forza emersi dalle recensioni positive"],
-  "weaknesses": ["3-5 aree di miglioramento dalle recensioni negative"],
-  "priorities": ["3 priorità urgenti da affrontare"],
-  "recommendations": ["3-5 raccomandazioni strategiche"],
-  "suggestions": ["5-7 suggerimenti concreti e actionable"]
-}
+Fornisci un'analisi STRATEGICA a livello BRAND in formato JSON con:
+1. "punti_forza": array di 5-8 punti di forza COMUNI a livello brand
+2. "punti_debolezza": array di 5-8 punti di debolezza RICORRENTI a livello brand
+3. "temi_positivi": array di 3-5 temi/pattern positivi emergenti
+4. "temi_negativi": array di 3-5 temi/pattern negativi ricorrenti
+5. "suggerimenti_strategici": array di 5-7 azioni strategiche per il brand
+6. "priorita": array di 3 priorità assolute da affrontare subito
 
-Concentrati su pattern ricorrenti. Scrivi in italiano. Rispondi SOLO con JSON valido.`;
+Concentrati su PATTERN RICORRENTI e INSIGHT STRATEGICI, non su casi singoli.
+Rispondi SOLO con JSON valido, senza testo aggiuntivo.`;
 
-        console.log(`Analyzing ${reviewsWithText.length} reviews for ${placeName} (${positiveReviews.length} pos, ${negativeReviews.length} neg samples)`);
+        console.log(`Starting aggregated analysis for ${brandName} with ${reviews.length} total reviews`);
 
         const completion = await openai.chat.completions.create({
             model: openaiModel,
             messages: [
                 {
                     role: 'system',
-                    content: 'Sei un esperto di analisi del sentiment e customer experience. Rispondi sempre in formato JSON valido.'
+                    content: 'Sei un consulente strategico esperto in brand reputation e customer experience. Rispondi sempre in formato JSON valido.'
                 },
                 {
                     role: 'user',
@@ -117,14 +119,21 @@ Concentrati su pattern ricorrenti. Scrivi in italiano. Rispondi SOLO con JSON va
                 }
             ],
             temperature: 0.7,
-            max_tokens: 1500
+            max_tokens: 2500
         });
 
         const analysisText = completion.choices[0].message.content.trim()
             .replace(/```json/g, '').replace(/```/g, '').trim();
-        const analysis = JSON.parse(analysisText);
 
-        console.log('Analysis completed successfully');
+        let analysis;
+        try {
+            analysis = JSON.parse(analysisText);
+        } catch (e) {
+            console.error('Failed to parse OpenAI response:', analysisText);
+            throw new Error('Invalid JSON response from OpenAI');
+        }
+
+        console.log('Aggregated analysis completed successfully');
 
         return {
             statusCode: 200,
@@ -136,12 +145,12 @@ Concentrati su pattern ricorrenti. Scrivi in italiano. Rispondi SOLO con JSON va
         };
 
     } catch (error) {
-        console.error('Error analyzing place:', error);
+        console.error('Error in aggregated analysis:', error);
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({
-                error: 'Failed to analyze place',
+                error: 'Failed to perform aggregated analysis',
                 message: error.message
             })
         };

@@ -4,57 +4,56 @@
 
 Maps Hub è un'applicazione web progettata per **trovare**, **analizzare** e **monitorare** la reputazione online di brand e luoghi su Google Maps. Utilizza tecnologie avanzate (Apify per lo scraping, OpenAI per l'analisi) per fornire insight dettagliati a partire dalle recensioni pubbliche.
 
-### Flusso di Lavoro
-1.  **Configurazione**: L'utente inserisce le chiavi API (Apify e OpenAI) e definisce i parametri di ricerca (brand, location, limiti).
+### Flusso di Lavoro Ottimizzato (v2.0)
+1.  **Configurazione**: L'utente inserisce le chiavi API (Apify e OpenAI) e definisce i parametri di ricerca.
 2.  **Ricerca Schede (Search)**: L'app interroga Google Maps (tramite Apify) per trovare le schede pertinenti.
-3.  **Selezione**: L'utente sceglie quali schede analizzare tra i risultati trovati.
-4.  **Scraping Recensioni**: L'app scarica le recensioni dettagliate (testo, voto, data, risposta proprietario) per le schede selezionate.
-5.  **Analisi AI**: Le recensioni vengono elaborate da GPT-4o-mini per estrarre punti di forza, debolezza e suggerimenti strategici.
-6.  **Report**: I risultati vengono presentati in una dashboard con statistiche aggregate ed esportabili in PDF/CSV.
+3.  **Selezione**: L'utente sceglie quali schede analizzare.
+4.  **Scraping Recensioni**: L'app scarica le recensioni dettagliate per le schede selezionate (testo, voto, data).
+    *   *Miglioramento*: Il server (Netlify Function `check-scrape`) ora restituisce i dati **immediatamente** dopo il completamento dello scraping, senza attendere l'analisi AI.
+5.  **Analisi AI Progressiva (Client-Side)**:
+    *   L'app nel browser avvia l'analisi AI per ogni scheda individualmente (tramite `analyze-place`).
+    *   L'utente vede i risultati apparire man mano che vengono completati, senza blocchi o timeout.
+    *   Alla fine, viene generata un'analisi aggregata del brand (tramite `analyze-aggregated`).
+6.  **Report**: I risultati vengono presentati in una dashboard con statistiche aggregate ed esportabili.
 
 ---
 
 ## Logica di Ricerca e Selezione Schede
 
 ### 1. Come vengono selezionate le schede?
-L'app utilizza un **"Browser simulato"** (tramite l'actor *Google Maps Scraper* di Apify) che si comporta esattamente come un utente umano che naviga su Google Maps.
+L'app utilizza un **"Browser simulato"** (Apify *Google Maps Scraper*) che replica la navigazione umana.
+*   **Query**: Es. "McDonald's" in "Italia" -> cerca su Maps con `countryCode: 'it'`.
+*   **Ranking**: Rispetta l'ordine di Google (Rilevanza, Prominenza, Distanza).
+*   **Limite**: Si ferma esattamente al numero di schede richiesto (`maxCrawledPlacesPerSearch`), garantendo velocità.
 
-*   **Query**: Se cerchi "McDonald's" in "Italia", l'app esegue letteralmente la ricerca `McDonald's` su Google Maps impostando la regione di ricerca sull'Italia (`countryCode: 'it'`).
-*   **Ranking**: Le schede vengono restituite nell'ordine esatto in cui Google le mostra per quella ricerca. Google ordina i risultati in base a **Rilevanza** (pertinenza col brand), **Prominenza** (popolarità, recensioni) e **Distanza** (se implicita).
-*   **Limite (Max Schede)**: Se imposti "Max 10 schede", l'app prenderà le **prime 10 schede** restituite da Google.
-    *   *Nota*: Non vengono selezionate "le 10 più vicine a un centro" geometrico specifico, ma le 10 che Google ritiene più rilevanti per la query "Brand in Italia". Spesso queste coincidono con le sedi più importanti o popolari a livello nazionale, oppure sono distribuite geograficamente se Google 'diversifica' i risultati.
-
-### 2. Cosa significa "Ricerca Bilanciata"?
-Attualmente, abbiamo ottimizzato l'app per utilizzare una modalità di ricerca unificata ed efficiente ("Balanced"), che ignora le vecchie distinzioni per garantire velocità e risparmio di crediti.
-
-*   **Balanced (Default)**: Esegue una ricerca standard ottimizzata.
-    *   Imposta un limite preciso (`maxCrawledPlacesPerSearch`) per fermare lo scraping appena raggiunto il numero richiesto.
-    *   Usa parametri di "autoscroll" limitati per evitare che il bot continui a scorrere pagine inutilmente (causa della lentezza precedente).
-    *   Esclude il download delle recensioni in questa fase (vengono scaricate solo dopo la selezione confermata dall'utente), risparmiando tempo e costi.
+### 2. Ricerca Bilanciata ed Efficiente
+L'app usa una modalità "Balanced" ottimizzata:
+*   **Stop Immediato**: Usa parametri precisi per fermare il bot appena raggiunto l'obiettivo.
+*   **No Autoscroll Infinito**: Previene lo spreco di tempo e crediti su pagine inutili.
+*   **Download Differito**: Le recensioni vengono scaricate solo *dopo* la conferma dell'utente.
 
 ### 3. Gestione della Location
-*   **"Solo Italia"**: Imposta il parametro tecnico `countryCode: 'it'`. Questo dice a Google di privilegiare e cercare risultati nel territorio italiano.
-*   **"Custom Location"** (es. "Milano"): Aggiunge esplicitamente la località alla query di ricerca (es. "McDonald's Milano") per restringere il campo.
-*   **"Tutto il Mondo"**: Rimuove i filtri geografici.
+*   **"Solo Italia"**: Imposta `countryCode: 'it'`.
+*   **"Custom Location"**: Aggiunge la città alla query (es. "Brand Milano").
+*   **"Tutto il Mondo"**: Nessun filtro geografico.
 
 ---
 
-## Ottimizzazioni Recenti (Perché ora è veloce?)
+## Ottimizzazioni Performance e AI
 
-Abbiamo risolto un problema critico che rendeva la ricerca lenta:
-*   **Prima**: L'app usava un parametro sbagliato (`maxCrawledPlaces`) che veniva ignorato dall'actor, portandolo a scansionare centinaia di pagine (es. 259 pagine per trovare 2 schede).
-*   **Ora**: Usa `maxCrawledPlacesPerSearch`, che è il comando corretto per dire al bot: *"Fermati appena hai trovato X schede"*.
-*   Inoltre, abbiamo impostato `maxAutoscrolledPlaces` per impedire lo scrolling infinito.
+### Problema Risolto: "Lentezza e Timeout"
+Precedentemente, l'analisi AI avveniva tutta insieme sul server. Se l'analisi richiedeva >10 secondi (comune con molte recensioni), la richiesta andava in timeout (errore 504) e l'app sembrava bloccata.
 
-Questo garantisce che se chiedi 10 schede, il bot farà il lavoro minimo indispensabile per trovarle, riducendo i tempi da minuti a pochi secondi.
+### Soluzione: Architettura Asincrona
+Ora l'architettura è **de-coppiata**:
+1.  **Scraping Veloce**: Il server si occupa solo di scaricare i dati e restituirli.
+2.  **Analisi Distribuita**: Il browser "orchestra" l'analisi AI, chiamando l'API per ogni scheda separatamente.
+    *   **Vantaggio 1**: Risultati visibili subito.
+    *   **Vantaggio 2**: Nessun rischio di timeout del server per operazioni lunghe.
+    *   **Vantaggio 3**: Feedback visuale (barra di avanzamento) preciso.
 
----
-
-## Analisi AI (Costi e Performance)
-
-Per l'analisi qualitativa, abbiamo adottato la strategia dell'app di riferimento per massimizzare la qualità riducendo i costi:
-1.  **Campionamento Intelligente**: Invece di inviare tutte le recensioni, analizziamo un campione rappresentativo:
-    *   20 Recensioni Positive (4-5 stelle)
-    *   20 Recensioni Negative (1-2 stelle)
-2.  **Troncamento**: Ogni recensione viene troncata a 200 caratteri per evitare di sprecare token su testi lunghissimi non necessari.
-3.  **Modello**: Usiamo `gpt-4o-mini` di default, che è molto più veloce ed economico di GPT-4, mantenendo un'ottima capacità di analisi in italiano.
+### Strategia AI (Costi e Qualità)
+Per massimizzare la qualità riducendo i costi:
+1.  **Campionamento**: Analizziamo un campione rappresentativo (20 Positive + 20 Negative).
+2.  **Troncamento**: Testi limitati a 200 caratteri per risparmiare token.
+3.  **Analisi Aggregata**: Una funzione dedicata (`analyze-aggregated`) sintetizza i trend di tutto il brand in una sola chiamata finale.

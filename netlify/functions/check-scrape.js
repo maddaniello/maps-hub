@@ -1,5 +1,6 @@
 const { ApifyClient } = require('apify-client');
-const { OpenAI } = require('openai');
+// OpenAI removed - analysis now client-side
+
 
 exports.handler = async (event) => {
     const headers = {
@@ -154,30 +155,8 @@ exports.handler = async (event) => {
 
             const places = Array.from(placeMap.values());
 
-            // Perform AI analysis inline (no separate function call to avoid timeout)
-            if (aiEnabled && openaiApiKey && places.length > 0) {
-                console.log(`Starting inline AI analysis for ${places.length} places...`);
+            // AI analysis moved to client-side orchestration to avoid timeouts
 
-                try {
-                    const openai = new OpenAI({ apiKey: openaiApiKey });
-
-                    for (const place of places) {
-                        try {
-                            const analysis = await analyzePlace(openai, openaiModel, place.title, place.reviews);
-                            if (analysis) {
-                                place.analysis = analysis;
-                            }
-                        } catch (err) {
-                            console.error(`Failed to analyze ${place.title}:`, err.message);
-                            place.analysis = null;
-                        }
-                    }
-
-                    console.log('AI analysis completed');
-                } catch (err) {
-                    console.error('Failed to initialize OpenAI:', err.message);
-                }
-            }
 
             // Calculate aggregate statistics
             const allReviews = places.flatMap(p => p.reviews);
@@ -260,76 +239,6 @@ exports.handler = async (event) => {
         };
     }
 };
-
-// ========================================
-// Inline AI Analysis (avoids separate function call timeout)
-// Uses same optimized approach as reference app:
-// - Sample 20 positive + 20 negative reviews
-// - Truncate to 200 chars each
-// - Efficient prompt
-// ========================================
-async function analyzePlace(openai, model, placeName, reviews) {
-    const reviewsWithText = reviews.filter(r => r.text && r.text.trim().length > 0);
-
-    if (reviewsWithText.length === 0) {
-        return {
-            strengths: ['Dati insufficienti per l\'analisi'],
-            weaknesses: ['Nessuna recensione con testo disponibile'],
-            priorities: ['Incoraggiare i clienti a lasciare recensioni dettagliate'],
-            recommendations: ['Migliorare la quantità e qualità delle recensioni'],
-            suggestions: ['Implementare campagne di richiesta recensioni']
-        };
-    }
-
-    // Sample like the reference app: 20 positive + 20 negative, truncated to 200 chars
-    const positiveReviews = reviewsWithText.filter(r => (r.stars || 0) >= 4).slice(0, 20);
-    const negativeReviews = reviewsWithText.filter(r => (r.stars || 0) <= 2).slice(0, 20);
-
-    const positiveTexts = positiveReviews.map(r => `- ${r.text.substring(0, 200)}`).join('\n');
-    const negativeTexts = negativeReviews.map(r => `- ${r.text.substring(0, 200)}`).join('\n');
-
-    const prompt = `Analizza le seguenti recensioni di Google Maps per "${placeName}".
-
-RECENSIONI POSITIVE (${positiveReviews.length} campioni):
-${positiveTexts || '- Nessuna recensione positiva con testo'}
-
-RECENSIONI NEGATIVE (${negativeReviews.length} campioni):
-${negativeTexts || '- Nessuna recensione negativa con testo'}
-
-Totale recensioni analizzate: ${reviewsWithText.length}
-
-Fornisci un'analisi strutturata in formato JSON con:
-{
-  "strengths": ["punti di forza emersi dalle recensioni positive (3-5)"],
-  "weaknesses": ["aree di miglioramento dalle recensioni negative (3-5)"],
-  "priorities": ["le 3 priorità più urgenti da affrontare"],
-  "recommendations": ["raccomandazioni strategiche (3-5)"],
-  "suggestions": ["suggerimenti concreti e actionable (5-7)"]
-}
-
-Concentrati su PATTERN RICORRENTI. Scrivi in italiano. Rispondi SOLO con JSON valido.`;
-
-    const completion = await openai.chat.completions.create({
-        model: model || 'gpt-4o-mini',
-        messages: [
-            {
-                role: 'system',
-                content: 'Sei un esperto di analisi del sentiment e customer experience. Rispondi sempre in formato JSON valido.'
-            },
-            {
-                role: 'user',
-                content: prompt
-            }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500
-    });
-
-    const resultText = completion.choices[0].message.content.trim()
-        .replace(/```json/g, '').replace(/```/g, '').trim();
-
-    return JSON.parse(resultText);
-}
 
 // ========================================
 // Helper: Extract top keywords (with extended Italian stopwords)
